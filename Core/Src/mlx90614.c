@@ -16,7 +16,7 @@
 #define EMISSIVITY_REG	(EEPROM_OP | 0x04)
 #define CONFIG_REG		(EEPROM_OP | 0x05)
 
-#define HUMAN_EMISSIVITY 0.98
+#define HUMAN_EMISSIVITY 1.0
 #define TEMP_MIN_F 80
 #define TEMP_MAX_F 110
 
@@ -73,17 +73,23 @@ uint8_t write_word(MLX90614_t* mlx90614, uint8_t address, const uint16_t word) {
 		buf[4] = crc8(buf, 4);
 
 		if (HAL_I2C_Mem_Write(mlx90614->hi2c, SAD, address,
-				I2C_MEMADD_SIZE_8BIT, buf + 2, 3, 100) != HAL_OK) {
+				I2C_MEMADD_SIZE_8BIT, buf + 2, 3, HAL_MAX_DELAY) != HAL_OK) {
 			return 0;
 		}
 	}
+
+	HAL_Delay(1000);
 
 	buf[2] = word & 0xFF;
 	buf[3] = word >> 8;
 	buf[4] = crc8(buf, 4);
 
-	return HAL_I2C_Mem_Write(mlx90614->hi2c, SAD, address,
-			I2C_MEMADD_SIZE_8BIT, buf + 2, 3, 100) == HAL_OK;
+	uint8_t status = HAL_I2C_Mem_Write(mlx90614->hi2c, SAD, address,
+			I2C_MEMADD_SIZE_8BIT, buf + 2, 3, HAL_MAX_DELAY) == HAL_OK;
+
+	HAL_Delay(1000);
+
+	return status;
 }
 
 
@@ -102,7 +108,7 @@ uint8_t read_word(MLX90614_t* mlx90614, uint8_t address, uint16_t* word) {
 	uint8_t buf[6];
 
 	if (HAL_I2C_Mem_Read(mlx90614->hi2c, SAD, address,
-			I2C_MEMADD_SIZE_8BIT, buf + 3, 3, 100) != HAL_OK) {
+			I2C_MEMADD_SIZE_8BIT, buf + 3, 3, HAL_MAX_DELAY) != HAL_OK) {
 		return 0;
 	}
 
@@ -110,7 +116,7 @@ uint8_t read_word(MLX90614_t* mlx90614, uint8_t address, uint16_t* word) {
 	buf[1] = address;
 	buf[2] = SAD + 1;
 
-	if (crc8(buf, 5) != buf[6]) {
+	if (crc8(buf, 5) != buf[5]) {
 		return 0;
 	}
 
@@ -125,7 +131,7 @@ uint8_t read_word(MLX90614_t* mlx90614, uint8_t address, uint16_t* word) {
  * @return 		Fahrenheit value
  */
 inline static float raw_to_F(uint16_t raw) {
-	return 1.8f * (((float)(raw) * 0.02f) - 273.15) + 32;
+	return 1.8f * (((float)(raw) * 0.02f) - 273.15) + 32 + 7;
 }
 
 
@@ -133,9 +139,7 @@ inline static float raw_to_F(uint16_t raw) {
 uint8_t MLX90614_init(MLX90614_t* mlx90614) {
 
 	uint8_t status = 1;
-
 	status &= write_word(mlx90614, EMISSIVITY_REG, (uint16_t)(HUMAN_EMISSIVITY * 0xffff));
-
 
 	return status;
 }
@@ -162,6 +166,10 @@ uint8_t MLX90614_read_object(MLX90614_t* mlx90614, float* temp_out) {
 
 	*temp_out = raw_to_F(raw);
 	return 1;
+}
+
+uint8_t MLX90614_read_emm(MLX90614_t* mlx90614, uint16_t* emm) {
+	return read_word(mlx90614, EMISSIVITY_REG, emm);
 }
 
 

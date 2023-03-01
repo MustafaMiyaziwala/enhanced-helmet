@@ -27,5 +27,7 @@ uint8_t MLX90614_read_ambient(MLX90614_t*, float* temp_out);
 
 uint8_t MLX90614_read_object(MLX90614_t*, float* temp_out);
 
+uint8_t MLX90614_read_emm(MLX90614_t*, uint16_t* emm);
+
 
 #endif /* __MLX90614_H */
