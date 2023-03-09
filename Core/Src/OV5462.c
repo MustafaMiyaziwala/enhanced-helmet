@@ -30,10 +30,10 @@ uint8_t OV5462_write_regs(OV5462_t* ov5462, const reg_value_pair regs[]) {
 
 void OV5462_init(OV5462_t* ov5462) {
 	OV5462_write_reg(ov5462, 0x3008, 0x80);
-	OV5462_write_regs(ov5462, SET_QVGA); // determine if we need to do this for our application
+	OV5462_write_regs(ov5462, SET_QVGA_MODE); // determine if we need to do this for our application
 
 	// configure camera for JPEG capture
-	OV5462_write_regs(ov5462, CONFIGURE_JPEG); // use JPEG capture mode
+	OV5462_write_regs(ov5462, CONFIGURE_JPEG_CAPTURE); // use JPEG capture mode
 	OV5462_write_regs(ov5462, SET_RESOLUTION_320X240); // set sensor to low resolution
 	OV5462_write_reg(ov5462, 0x3818, 0xa8);
 	OV5462_write_reg(ov5462, 0x3621, 0x10);
