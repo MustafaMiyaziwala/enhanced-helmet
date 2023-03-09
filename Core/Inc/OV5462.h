@@ -45,5 +45,5 @@ const reg_value_pair SET_RESOLUTION_320X240[] = {
 
 void OV5462_init(OV5462_t*);
 
-uint8_t OV5462_write_reg_byte(OV5462_t*, int addr, int data);
+uint8_t OV5462_write_reg(OV5462_t*, int addr, int data);
 uint8_t OV5462_write_regs(OV5462_t*, const reg_value_pair regs[]);
