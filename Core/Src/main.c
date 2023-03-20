@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include "OV5462.h"
 
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -72,60 +73,152 @@ static void MX_I2C2_Init(void);
   */
 int main(void)
 {
-  /* USER CODE BEGIN 1 */
+	/* USER CODE BEGIN 1 */
 
-  /* USER CODE END 1 */
+	/* USER CODE END 1 */
 
-  /* MCU Configuration--------------------------------------------------------*/
+	/* MCU Configuration--------------------------------------------------------*/
 
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
+	/* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+	HAL_Init();
 
-  /* USER CODE BEGIN Init */
+	/* USER CODE BEGIN Init */
 
-  /* USER CODE END Init */
+	/* USER CODE END Init */
 
-  /* Configure the system clock */
-  SystemClock_Config();
+	/* Configure the system clock */
+	SystemClock_Config();
 
-  /* USER CODE BEGIN SysInit */
+	/* USER CODE BEGIN SysInit */
 
-  /* USER CODE END SysInit */
+	/* USER CODE END SysInit */
 
-  /* Initialize all configured peripherals */
-  MX_GPIO_Init();
-  MX_LPUART1_UART_Init();
-  MX_SPI1_Init();
-  MX_I2C2_Init();
-  /* USER CODE BEGIN 2 */
-  HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
-  uint8_t buf[1] = { 0x00 }; // dummy write
-  HAL_SPI_Transmit(&hspi1, buf, 1, 100);
+	/* Initialize all configured peripherals */
+	MX_GPIO_Init();
+	MX_LPUART1_UART_Init();
+	MX_SPI1_Init();
+	MX_I2C2_Init();
+	/* USER CODE BEGIN 2 */
+	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
+	uint8_t buf[1] = { 0x00 }; // dummy write
+	HAL_SPI_Transmit(&hspi1, buf, 1, 100);
 
-  HAL_Delay(1000);
+	OV5462_t ov5462 = { &hi2c2, &hspi1 };
 
-  OV5462_t ov5462 = { &hi2c2, &hspi1 };
-  OV5462_write_spi_reg(&ov5462, 0x00, 0x55);
-  uint8_t tmp = OV5462_read_spi_reg(&ov5462, 0x00);
+	HAL_Delay(1000);
+
+	while (1) {
+		OV5462_write_spi_reg(&ov5462, 0x00, 0x25);
+		uint8_t tmp = OV5462_read_spi_reg(&ov5462, 0x00);
+
+		if (tmp == 0x25) {
+		printf("SPI Test PASS!\n");
+		break; // continue to program
+		} else {
+		printf("SPI Test FAIL!\n");
+		HAL_Delay(1000);
+		}
+	}
+
+	while (1) {
+		uint8_t upper = OV5462_read_i2c_reg(&ov5462, CHIPID_UPPER);
+		uint8_t lower = OV5462_read_i2c_reg(&ov5462, CHIPID_LOWER);
+
+		if (upper == 0x56 && lower == 0x42) {
+			printf("I2C Test PASS!\n");
+			break; // continue to program
+		} else {
+			printf("I2C Test FAIL!\n");
+			HAL_Delay(1000);
+		}
+	}
+
+	if (OV5462_init(&ov5462)) {
+		printf("Init fail!");
+	}
+	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK);
+	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FRAMES, 0x00);
+
+	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_START_MASK); // start capture
 
 
-  /* USER CODE END 2 */
+	/* USER CODE END 2 */
 
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
-  while (1)
-  {
-    /* USER CODE END WHILE */
-	  if (tmp == 0x55) {
-		  printf("MATCH!\n");
-	  } else {
-		  printf("FAIL: %x\n", tmp);
-	  }
+	/* Infinite loop */
+	/* USER CODE BEGIN WHILE */
+	while (1)
+	{
+		uint8_t image_buf[256];
+		uint8_t status = OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER);
+		if (status & CAPTURE_DONE_MASK) {
+			int length = (int) OV5462_read_fifo_length(&ov5462);
+			if (length >= MAX_FIFO_LENGTH || length == 0) {
+				printf("FIFO length ERROR\n");
+				break;
+			}
 
-	  HAL_Delay(1000);
-    /* USER CODE BEGIN 3 */
-  }
-  /* USER CODE END 3 */
+			printf("%d bytes\n", length);
+
+			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET); // chip select LOW
+			buf[0] = BURST_FIFO_READ;
+			HAL_SPI_Transmit(ov5462.hspi, buf, 1, 100); // send FIFO burst command
+
+			uint8_t curr_byte = 0;
+			uint8_t last_byte = 0;
+
+			uint8_t header_received = 0;
+			int i = 0;
+
+			while (length--) {
+				last_byte = curr_byte;
+				buf[0] = 0;
+				HAL_SPI_Receive(ov5462.hspi, buf, 1, 100);
+				curr_byte = buf[0];
+
+				if (header_received) {
+					if (i < 256) {
+						image_buf[i++] = curr_byte;
+					} else {
+						HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
+						for (int j = 0; j < i; ++j) {
+							printf("%02X", image_buf[j]);
+						}
+
+						HAL_Delay(5);
+						i = 0;
+						image_buf[i++] = curr_byte;
+						HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
+						buf[0] = BURST_FIFO_READ;
+						HAL_SPI_Transmit(ov5462.hspi, buf, 1, 100); // send FIFO burst command
+					}
+				} else if (curr_byte == 0xD8 && last_byte == 0xFF) {
+					header_received = 1;
+					image_buf[i++] = last_byte;
+					image_buf[i++] = curr_byte;
+				}
+
+				if (curr_byte == 0xD9 && last_byte == 0xFF) {
+//					printf("end of image reached");
+					break;
+				}
+			}
+
+			for (int j = 0; j < i; ++j) {
+				printf("%02X", image_buf[j]);
+			}
+
+			printf("\n%d", i);
+
+			break;
+		}
+	}
+	/* USER CODE END WHILE */
+
+	/* USER CODE BEGIN 3 */
+	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
+	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK);
+
+	/* USER CODE END 3 */
 }
 
 /**
