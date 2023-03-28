@@ -1,4 +1,13 @@
-IO_LOC "sys_clk" 35;
-IO_LOC "sys_rst_n" 15;
+//Copyright (C)2014-2020 Gowin Semiconductor Corporation.
+//All rights reserved. 
+//File Title: Physical Constraints file
+//GOWIN Version: V1.9.6Alpha
+//Part Number: GW1N-LV1QN48C6/I5
+//Created Time: Mon 03 27 21:29:30 2023
+
 IO_LOC "trig_0" 16;
-IO_LOC "echo_0" 34;
+IO_LOC "test_0" 17;
+IO_LOC "echo_0" 38;
+IO_PORT "echo_0" IO_TYPE=LVCMOS33 PULL_MODE=DOWN;
+IO_LOC "sys_rst_n" 15;
+IO_LOC "sys_clk" 35;
