@@ -23,6 +23,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
+#include <string.h>
+#include "OV5462.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -32,6 +34,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define CHUNK_SIZE 512
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -44,13 +47,19 @@ ADC_HandleTypeDef hadc1;
 
 I2C_HandleTypeDef hi2c1;
 
+SPI_HandleTypeDef hspi1;
 SPI_HandleTypeDef hspi2;
 SPI_HandleTypeDef hspi3;
 
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-
+FATFS fs;
+FATFS * pfs;
+FIL fil;
+FRESULT fres;
+DWORD fre_clust;
+uint32_t total_space, free_space;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -61,12 +70,80 @@ static void MX_SPI2_Init(void);
 static void MX_SPI3_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_ADC1_Init(void);
+static void MX_SPI1_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+int testSD() {
+/* Mount SD Card */
+	int ret = 0;
+	if(f_mount(&fs, "", 0) != FR_OK) {
+		printf("Failed to mount SD Card\r\n");
+		return -1;
+	}
+
+	/* Open file to write */
+	ret = f_open(&fil, "test.txt", FA_OPEN_ALWAYS | FA_READ | FA_WRITE);
+	if(ret != FR_OK) {
+		printf("Failed to open file (%i) \r\n", ret);
+		return -1;
+	}
+
+	if(f_getfree("", &fre_clust, &pfs) != FR_OK) {
+		printf("Free space check failed\r\n");
+		return -1;
+	}
+
+	total_space = (uint32_t)((pfs->n_fatent - 2) * pfs->csize * 0.5);
+	free_space = (uint32_t)(fre_clust * pfs->csize * 0.5);
+
+	/* free space is less than 1kb */
+	if(free_space < 1) {
+		printf("Drive is full\r\n");
+		return -1;
+	}
+
+//	printf("SD CARD MOUNTED! TESTING R/W...\r\n");
+
+	f_puts("TEST", &fil);
+
+	/* Close file */
+	if(f_close(&fil) != FR_OK) {
+		printf("Drive is full\r\n");
+		return -1;
+	}
+
+	/* Open file to read */
+	if(f_open(&fil, "test.txt", FA_READ) != FR_OK) {
+		printf("Failed to open in read mode\r\n");
+		return -1;
+	}
+
+	char buffer[5];
+	f_gets(buffer, sizeof(buffer), &fil);
+
+	if (strcmp(buffer, "TEST")) {
+		printf("File contents MISMATCH. FAIL R/W test\r\n");
+		return -1;
+	}
+
+//	printf("PASSED: read file contents\r\n");
+
+	/* Close file */
+	if(f_close(&fil) != FR_OK) {
+		printf("Failed to close\r\n");
+		return -1;
+	}
+
+	if(f_unlink("test.txt") != FR_OK) {
+		printf("Failed to delete test file \r\n");
+	}
+
+	return 0;
+}
 
 /* USER CODE END 0 */
 
@@ -104,7 +181,289 @@ int main(void)
   MX_USART2_UART_Init();
   MX_FATFS_Init();
   MX_ADC1_Init();
+  MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
+  HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
+  	uint8_t buf[1] = { 0x00 }; // dummy write
+  	HAL_SPI_Transmit(&hspi1, buf, 1, 100);
+
+  	OV5462_t ov5462 = { &hi2c1, &hspi1 };
+
+  	HAL_Delay(1000);
+
+  	if(testSD()) {
+  		printf("SD test FAIL! Aborting...\r\n");
+  		return 0;
+  	} else {
+  		printf("SD test PASS!\r\n");
+  	}
+
+  	while (1) {
+  		OV5462_write_spi_reg(&ov5462, 0x00, 0x25);
+  		uint8_t tmp = OV5462_read_spi_reg(&ov5462, 0x00);
+
+  		if (tmp == 0x25) {
+  		printf("SPI Test PASS!\r\n");
+  		break; // continue to program
+  		} else {
+  		printf("SPI Test FAIL!\r\n");
+  		HAL_Delay(1000);
+  		}
+  	}
+
+  	while (1) {
+  		uint8_t upper = OV5462_read_i2c_reg(&ov5462, CHIPID_UPPER);
+  		uint8_t lower = OV5462_read_i2c_reg(&ov5462, CHIPID_LOWER);
+
+  		if (upper == 0x56 && lower == 0x42) {
+  			printf("I2C Test PASS!\r\n");
+  			break; // continue to program
+  		} else {
+  			printf("I2C Test FAIL!\r\n");
+  			HAL_Delay(1000);
+  		}
+  	}
+
+  	if (OV5462_init(&ov5462)) {
+  		printf("Init fail!");
+  	}
+  	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK);
+  	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FRAMES, 0x07);
+
+
+
+  	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_START_MASK); // start capture
+
+  	uint8_t image_buf[CHUNK_SIZE];
+  	uint8_t status;
+
+  	uint bw;
+  	FRESULT fr;
+
+  	int image_num = 0;
+
+  //	while (1) {
+  //		status = OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER);
+  //		if (status & CAPTURE_DONE_MASK) {
+  //			break;
+  //		}
+  //	}
+
+  	printf("filling the buffer...\r\n");
+  	HAL_Delay(10000);
+  	printf("done!\r\n");
+
+
+  	int length = (int) OV5462_read_fifo_length(&ov5462);
+  	if (length >= MAX_FIFO_LENGTH || length == 0) {
+  		printf("FIFO length ERROR\n");
+  		return -1;
+  	}
+
+  	printf("%d bytes\r\n", length);
+
+  	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET); // chip select LOW
+  	buf[0] = BURST_FIFO_READ;
+  	HAL_SPI_Transmit(ov5462.hspi, buf, 1, 100); // send FIFO burst command
+
+  	uint8_t curr_byte = 0;
+  	uint8_t last_byte = 0;
+
+  	uint8_t header_received = 0;
+  	int i = 0; // buffer index
+
+  	while (length > 0) { // the FIFO buffer will contain multiple images
+  		int len = snprintf(NULL, 0, "%d.jpg", image_num);
+  		char* filename = malloc(len+1);
+  		snprintf(filename, len+1, "%d.jpg", image_num);
+  		printf("%s\r\n", filename);
+
+  		f_open(&fil, filename, FA_OPEN_ALWAYS | FA_READ | FA_WRITE);
+  		int image_start_idx = 0;
+  		if (i > 0) { // leftover from last chunk of prev image
+  			if (i % 2 != 0) i--;
+  			for (int j = i; j < CHUNK_SIZE; j += 2) {
+  				if (image_buf[j] == 0xD8) {
+  					if (j > 0 && image_buf[j-1] == 0xFF) {
+  						image_start_idx = j-1;
+  						header_received = 1;
+  						break;
+  					}
+  				} else if (image_buf[j] == 0xFF) {
+  					if (j < CHUNK_SIZE-1 && image_buf[j+1] == 0xD8) {
+  						image_start_idx = j;
+  						header_received = 1;
+  						break;
+  					}
+  				}
+  			}
+  			last_byte = image_buf[CHUNK_SIZE-1];
+  			length -= CHUNK_SIZE - i;
+
+  			if (header_received) {
+  				fr = f_write(&fil, &image_buf[image_start_idx], sizeof(uint8_t)*(CHUNK_SIZE - image_start_idx), &bw);
+  				if (fr) printf("ERROR (%i)", fr);
+  			}
+  		} else {
+  			last_byte = 0;
+  		}
+
+  		i = 0;
+
+  //		while (!header_received && length > 0) { // the leftover data didn't have a header. get a new chunk (it's very unlikely this loop would need to run more than once?)
+  //			HAL_SPI_Receive(ov5462.hspi, &image_buf[0], CHUNK_SIZE, 100);
+  //			length -= CHUNK_SIZE;
+  //
+  //			if (last_byte == 0xFF && image_buf[0] == 0xD8) { // handle edge case where the header breaks between chunks
+  //				header_received = 1;
+  //				image_start_idx = 0;
+  //				uint8_t tmp_buf[1];
+  //				tmp_buf[0] = last_byte;
+  //				fr = f_write(&fil, tmp_buf, sizeof(uint8_t), &bw);
+  //				if (fr) printf("ERROR (%i)", fr);
+  //			} else {
+  //				for (int j = 0; j < CHUNK_SIZE; j += 2) {
+  //					if (image_buf[j] == 0xD8) {
+  //						if (j > 0 && image_buf[j-1] == 0xFF) {
+  //							image_start_idx = j;
+  //							header_received = 1;
+  //							break;
+  //						}
+  //					} else if (image_buf[j] == 0xFF) {
+  //						if (j < CHUNK_SIZE-1 && image_buf[j+1] == 0xD8) {
+  //							image_start_idx = j-1;
+  //							header_received = 1;
+  //							break;
+  //						}
+  //					}
+  //				}
+  //				last_byte = image_buf[CHUNK_SIZE-1];
+  //			}
+  //		}
+  //
+  //		fr = f_write(&fil, &image_buf[image_start_idx], sizeof(uint8_t)*(CHUNK_SIZE - image_start_idx), &bw);
+  //		if (fr) printf("ERROR (%i)", fr);
+
+  		while(!header_received && length > 0) {
+  				last_byte = curr_byte;
+  				buf[0] = 0;
+  				HAL_SPI_Receive(ov5462.hspi, buf, 1, 100);
+  				curr_byte = buf[0];
+
+  				if (curr_byte == 0xD8 && last_byte == 0xFF) {
+  					header_received = 1;
+  					image_buf[i++] = last_byte;
+  					image_buf[i++] = curr_byte;
+  					i = 2;
+  					length -= 2;
+  				}
+  		}
+
+
+
+  		printf("Header received\r\n");
+
+  		int eof_received = 0;
+  		last_byte = 0;
+
+  		while (!eof_received && length > 0) {
+  			int next_chunk_size = CHUNK_SIZE - i;
+  			if (length < CHUNK_SIZE) {
+  				next_chunk_size = length;
+  			}
+
+  			HAL_SPI_Receive(ov5462.hspi, &image_buf[i], next_chunk_size, 100);
+  			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
+
+  			int valid_data_size = CHUNK_SIZE;
+
+  			if (last_byte == 0xFF && image_buf[0] == 0xD9) { // handle edge case where the EOF breaks between chunks
+  				valid_data_size = 1;
+  				eof_received = 1;
+  			} else {
+  				for (int j = 0; j < CHUNK_SIZE; j += 2) {
+  					if (image_buf[j] == 0xD9) {
+  						if (j > 0 && image_buf[j-1] == 0xFF) {
+  							valid_data_size = j+1; // offset 1 for 0 index
+  							eof_received = 1;
+  							break;
+  						}
+  					} else if (image_buf[j] == 0xFF) {
+  						if (j < CHUNK_SIZE-1 && image_buf[j+1] == 0xD9) {
+  							valid_data_size = j+2; // offset 1 for 0 index, another for the next byte
+  							eof_received = 1;
+  							break;
+  						}
+  					}
+  				}
+  			}
+
+  			fr = f_write(&fil, image_buf, sizeof(uint8_t)*valid_data_size, &bw);
+  			if (fr) printf("ERROR (%i)", fr);
+
+  			last_byte = image_buf[CHUNK_SIZE-1];
+
+  			if (eof_received) {
+  				i = valid_data_size; // we still need to process the rest of this chunk in case it includes the next image
+  			} else {
+  				i = 0;
+  			}
+  			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
+  			buf[0] = BURST_FIFO_READ;
+  			HAL_SPI_Transmit(ov5462.hspi, buf, 1, 100); // send FIFO burst command
+  			length -= valid_data_size;
+  		}
+
+  		if (eof_received) {
+  			printf("EOF\r\n");
+  		} else {
+  			printf("error\r\n");
+  		}
+
+  		eof_received = 0;
+  		header_received = 0;
+
+  		f_close(&fil);
+  		printf("Saved image successfully\r\n");
+  		++image_num;
+  	}
+
+  	printf("finished reading buffer!\r\n");
+
+  //	printf("Last chunk...\r\n");
+  //
+  //	i = 0;
+  //	last_byte = 0;
+  //	curr_byte = 0;
+  //
+  //
+  ////	HAL_SPI_Receive(ov5462.hspi, &image_buf[0], length, 100);
+  //	while (!eof_received) {
+  //		last_byte = curr_byte;
+  //		buf[0] = 0;
+  //		HAL_SPI_Receive(ov5462.hspi, buf, 1, 100);
+  //		curr_byte = buf[0];
+  //		image_buf[i++] = curr_byte;
+  //
+  //		if (curr_byte == 0xD9 && last_byte == 0xFF) {
+  //			eof_received = 1;
+  //		}
+  //	}
+  //
+  //	printf("EOF received...\r\n");
+  //
+  //	fr = f_write(&fil, image_buf, sizeof(uint8_t)*length, &bw);
+  //
+  //	if (fr) printf("ERROR (%i)", fr);
+
+
+
+  //			for (int j = 0; j < i; ++j) {
+  //				printf("%02X", image_buf[j]);
+  //			}
+
+  	if(f_mount(NULL, "", 1) != FR_OK)
+  		printf("Failed to unmount\r\n");
 
   /* USER CODE END 2 */
 
@@ -252,6 +611,44 @@ static void MX_I2C1_Init(void)
 }
 
 /**
+  * @brief SPI1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_SPI1_Init(void)
+{
+
+  /* USER CODE BEGIN SPI1_Init 0 */
+
+  /* USER CODE END SPI1_Init 0 */
+
+  /* USER CODE BEGIN SPI1_Init 1 */
+
+  /* USER CODE END SPI1_Init 1 */
+  /* SPI1 parameter configuration*/
+  hspi1.Instance = SPI1;
+  hspi1.Init.Mode = SPI_MODE_MASTER;
+  hspi1.Init.Direction = SPI_DIRECTION_2LINES;
+  hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
+  hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
+  hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
+  hspi1.Init.NSS = SPI_NSS_SOFT;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;
+  hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
+  hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
+  hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+  hspi1.Init.CRCPolynomial = 10;
+  if (HAL_SPI_Init(&hspi1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN SPI1_Init 2 */
+
+  /* USER CODE END SPI1_Init 2 */
+
+}
+
+/**
   * @brief SPI2 Initialization Function
   * @param None
   * @retval None
@@ -376,10 +773,7 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(SD_SPI2_CS_GPIO_Port, SD_SPI2_CS_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOC, SD_SPI2_CS_Pin|CAM_SPI1_CS_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(DAC_SPI2_CS_GPIO_Port, DAC_SPI2_CS_Pin, GPIO_PIN_RESET);
@@ -390,19 +784,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : SD_SPI2_CS_Pin */
-  GPIO_InitStruct.Pin = SD_SPI2_CS_Pin;
+  /*Configure GPIO pins : SD_SPI2_CS_Pin CAM_SPI1_CS_Pin */
+  GPIO_InitStruct.Pin = SD_SPI2_CS_Pin|CAM_SPI1_CS_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(SD_SPI2_CS_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : LD2_Pin */
-  GPIO_InitStruct.Pin = LD2_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(LD2_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pin : DAC_SPI2_CS_Pin */
   GPIO_InitStruct.Pin = DAC_SPI2_CS_Pin;

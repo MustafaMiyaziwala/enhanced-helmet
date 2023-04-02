@@ -1,3 +1,5 @@
+"./Core/Src/OV5462.o"
+"./Core/Src/OV5462_registers.o"
 "./Core/Src/fatfs_sd.o"
 "./Core/Src/main.o"
 "./Core/Src/stm32f4xx_hal_msp.o"
