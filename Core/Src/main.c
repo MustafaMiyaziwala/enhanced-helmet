@@ -36,6 +36,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define CHUNK_SIZE 512
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -235,90 +236,112 @@ int main(void)
 	f_open(&fil, "image.jpg", FA_OPEN_ALWAYS | FA_READ | FA_WRITE);
 
 	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_START_MASK); // start capture
+
+	uint8_t image_buf[CHUNK_SIZE];
+	uint8_t status;
+
+	uint bw;
+	FRESULT fr;
+
+	while (1) {
+		status = OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER);
+		if (status & CAPTURE_DONE_MASK) {
+			break;
+		}
+	}
+
+
+	int length = (int) OV5462_read_fifo_length(&ov5462);
+	if (length >= MAX_FIFO_LENGTH || length == 0) {
+		printf("FIFO length ERROR\n");
+		return -1;
+	}
+
+	printf("%d bytes\r\n", length);
+
+	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET); // chip select LOW
+	buf[0] = BURST_FIFO_READ;
+	HAL_SPI_Transmit(ov5462.hspi, buf, 1, 100); // send FIFO burst command
+
+	uint8_t curr_byte = 0;
+	uint8_t last_byte = 0;
+
+	uint8_t header_received = 0;
+	int i = 0; // buffer index
+
+	while(!header_received) {
+		last_byte = curr_byte;
+		buf[0] = 0;
+		HAL_SPI_Receive(ov5462.hspi, buf, 1, 100);
+		curr_byte = buf[0];
+
+		if (curr_byte == 0xD8 && last_byte == 0xFF) {
+			header_received = 1;
+			image_buf[i++] = last_byte;
+			image_buf[i++] = curr_byte;
+			i = 2;
+			length -= 2;
+		}
+	}
+
+	printf("Header received\r\n");
+
+	while (length > CHUNK_SIZE) {
+		HAL_SPI_Receive(ov5462.hspi, &image_buf[i], CHUNK_SIZE - i, 100);
+		HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
+		fr = f_write(&fil, image_buf, sizeof(uint8_t)*CHUNK_SIZE, &bw);
+		if (fr) printf("ERROR (%i)", fr);
+		i = 0;
+		HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
+		buf[0] = BURST_FIFO_READ;
+		HAL_SPI_Transmit(ov5462.hspi, buf, 1, 100); // send FIFO burst command
+		length -= CHUNK_SIZE;
+	}
+
+	printf("Last chunk...\r\n");
+
+	i = 0;
+	last_byte = 0;
+	curr_byte = 0;
+	int eof_received = 0;
+
+//	HAL_SPI_Receive(ov5462.hspi, &image_buf[0], length, 100);
+	while (!eof_received) {
+		last_byte = curr_byte;
+		buf[0] = 0;
+		HAL_SPI_Receive(ov5462.hspi, buf, 1, 100);
+		curr_byte = buf[0];
+		image_buf[i++] = curr_byte;
+
+		if (curr_byte == 0xD9 && last_byte == 0xFF) {
+			eof_received = 1;
+		}
+	}
+
+	printf("EOF received...\r\n");
+
+	fr = f_write(&fil, image_buf, sizeof(uint8_t)*length, &bw);
+
+	if (fr) printf("ERROR (%i)", fr);
+
+	f_close(&fil);
+
+	printf("Saved image successfully\r\n");
+
+//			for (int j = 0; j < i; ++j) {
+//				printf("%02X", image_buf[j]);
+//			}
+
+	if(f_mount(NULL, "", 1) != FR_OK)
+		printf("Failed to unmount\r\n");
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 	while (1)
 	{
-		uint8_t image_buf[4096];
-		uint8_t status = OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER);
 
-		uint bw;
-		FRESULT fr;
-
-		if (status & CAPTURE_DONE_MASK) {
-			int length = (int) OV5462_read_fifo_length(&ov5462);
-			if (length >= MAX_FIFO_LENGTH || length == 0) {
-				printf("FIFO length ERROR\n");
-				break;
-			}
-
-			printf("%d bytes\n", length);
-
-			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET); // chip select LOW
-			buf[0] = BURST_FIFO_READ;
-			HAL_SPI_Transmit(ov5462.hspi, buf, 1, 100); // send FIFO burst command
-
-			uint8_t curr_byte = 0;
-			uint8_t last_byte = 0;
-
-			uint8_t header_received = 0;
-			int i = 0;
-
-			while (length--) {
-				last_byte = curr_byte;
-				buf[0] = 0;
-				HAL_SPI_Receive(ov5462.hspi, buf, 1, 100);
-				curr_byte = buf[0];
-
-				if (header_received) {
-					if (i < 4096) {
-						image_buf[i++] = curr_byte;
-					} else {
-						HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
-						fr = f_write(&fil, image_buf, sizeof(uint8_t)*i, &bw);
-						if (fr) printf("ERROR (%i)", fr);
-//						for (int j = 0; j < i; ++j) {
-//							printf("%02X", image_buf[j]);
-//						}
-
-						HAL_Delay(5);
-						i = 0;
-						image_buf[i++] = curr_byte;
-						HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
-						buf[0] = BURST_FIFO_READ;
-						HAL_SPI_Transmit(ov5462.hspi, buf, 1, 100); // send FIFO burst command
-					}
-				} else if (curr_byte == 0xD8 && last_byte == 0xFF) {
-					header_received = 1;
-					image_buf[i++] = last_byte;
-					image_buf[i++] = curr_byte;
-				}
-
-				if (curr_byte == 0xD9 && last_byte == 0xFF) {
-//					printf("end of image reached");
-					break;
-				}
-			}
-
-			fr = f_write(&fil, image_buf, sizeof(uint8_t)*i, &bw);
-			if (fr) printf("ERROR (%i)", fr);
-
-			f_close(&fil);
-
-			printf("Saved image successfully\r\n");
-
-//			for (int j = 0; j < i; ++j) {
-//				printf("%02X", image_buf[j]);
-//			}
-
-			if(f_mount(NULL, "", 1) != FR_OK)
-				printf("Failed to unmount\r\n");
-
-
-			break;
-		}
 	}
     /* USER CODE END WHILE */
 
