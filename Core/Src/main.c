@@ -286,43 +286,92 @@ int main(void)
 
 	printf("Header received\r\n");
 
-	while (length > CHUNK_SIZE) {
-		HAL_SPI_Receive(ov5462.hspi, &image_buf[i], CHUNK_SIZE - i, 100);
+//	while (length > CHUNK_SIZE) {
+//		if (i < CHUNK_SIZE) {
+//			HAL_SPI_Receive(ov5462.hspi, &image_buf[i], 1, 100);
+//			i++;
+//		} else {
+//			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
+//			fr = f_write(&fil, image_buf, sizeof(uint8_t)*CHUNK_SIZE, &bw);
+//			if (fr) printf("ERROR (%i)", fr);
+//			i = 0;
+//			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
+//			buf[0] = BURST_FIFO_READ;
+//			HAL_SPI_Transmit(ov5462.hspi, buf, 1, 100); // send FIFO burst command
+//			length -= CHUNK_SIZE;
+//		}
+//	}
+
+	int eof_received = 0;
+
+	while (!eof_received && length > 0) {
+		int next_chunk_size = CHUNK_SIZE - i;
+		if (length < CHUNK_SIZE) {
+			next_chunk_size = length;
+		}
+
+		HAL_SPI_Receive(ov5462.hspi, &image_buf[i], next_chunk_size, 100);
 		HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
-		fr = f_write(&fil, image_buf, sizeof(uint8_t)*CHUNK_SIZE, &bw);
 		if (fr) printf("ERROR (%i)", fr);
+
+		int valid_data_size = CHUNK_SIZE;
+
+		if (last_byte == 0xFF && image_buf[0] == 0xD9) { // handle edge case where the EOF breaks between chunks
+			valid_data_size = 1;
+			eof_received = 1;
+		}
+
+		for (int j = 0; j < CHUNK_SIZE; j += 2) {
+			if (image_buf[j] == 0xD9) {
+				if (j > 0 && image_buf[j-1] == 0xFF) {
+					valid_data_size = j+1; // offset 1 for 0 index
+					eof_received = 1;
+					break;
+				}
+			} else if (image_buf[j] == 0xFF) {
+				if (j < CHUNK_SIZE-1 && image_buf[j+1] == 0xD9) {
+					valid_data_size = j+2; // offset 1 for 0 index, another for the next byte
+					eof_received = 1;
+					break;
+				}
+			}
+		}
+
+		fr = f_write(&fil, image_buf, sizeof(uint8_t)*valid_data_size, &bw);
+		last_byte = image_buf[CHUNK_SIZE-1];
+
 		i = 0;
 		HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
 		buf[0] = BURST_FIFO_READ;
 		HAL_SPI_Transmit(ov5462.hspi, buf, 1, 100); // send FIFO burst command
-		length -= CHUNK_SIZE;
+		length -= valid_data_size;
 	}
 
-	printf("Last chunk...\r\n");
-
-	i = 0;
-	last_byte = 0;
-	curr_byte = 0;
-	int eof_received = 0;
-
-//	HAL_SPI_Receive(ov5462.hspi, &image_buf[0], length, 100);
-	while (!eof_received) {
-		last_byte = curr_byte;
-		buf[0] = 0;
-		HAL_SPI_Receive(ov5462.hspi, buf, 1, 100);
-		curr_byte = buf[0];
-		image_buf[i++] = curr_byte;
-
-		if (curr_byte == 0xD9 && last_byte == 0xFF) {
-			eof_received = 1;
-		}
-	}
-
-	printf("EOF received...\r\n");
-
-	fr = f_write(&fil, image_buf, sizeof(uint8_t)*length, &bw);
-
-	if (fr) printf("ERROR (%i)", fr);
+//	printf("Last chunk...\r\n");
+//
+//	i = 0;
+//	last_byte = 0;
+//	curr_byte = 0;
+//
+//
+////	HAL_SPI_Receive(ov5462.hspi, &image_buf[0], length, 100);
+//	while (!eof_received) {
+//		last_byte = curr_byte;
+//		buf[0] = 0;
+//		HAL_SPI_Receive(ov5462.hspi, buf, 1, 100);
+//		curr_byte = buf[0];
+//		image_buf[i++] = curr_byte;
+//
+//		if (curr_byte == 0xD9 && last_byte == 0xFF) {
+//			eof_received = 1;
+//		}
+//	}
+//
+//	printf("EOF received...\r\n");
+//
+//	fr = f_write(&fil, image_buf, sizeof(uint8_t)*length, &bw);
+//
+//	if (fr) printf("ERROR (%i)", fr);
 
 	f_close(&fil);
 

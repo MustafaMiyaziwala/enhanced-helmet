@@ -105,3 +105,7 @@ uint32_t OV5462_read_fifo_length(OV5462_t* ov5462) {
 	return ((upper << 16) | (middle << 8) | lower) & 0x07fffff;
 }
 
+uint8_t SPI_OptimizedReadWriteByte(uint8_t data) {
+	return 0;
+}
+
