@@ -105,6 +105,9 @@ uint32_t OV5462_read_fifo_length(OV5462_t* ov5462) {
 	return ((upper << 16) | (middle << 8) | lower) & 0x07fffff;
 }
 
-uint8_t SPI_OptimizedReadWriteByte(uint8_t data) {
-	return 0;
+void SPI_OptimizedReadByte(uint8_t* data) {
+	while (((SPI1->SR)&(1>>7))) {}; // wait for BSY bit to reset
+	SPI1->DR = 0; // dummy byte
+	while (!((SPI1->SR) & (1<<0))) {};
+	*data = SPI1->DR;
 }

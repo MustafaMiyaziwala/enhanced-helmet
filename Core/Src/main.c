@@ -242,15 +242,15 @@ int main(void)
 
   	int image_num = 0;
 
-  //	while (1) {
-  //		status = OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER);
-  //		if (status & CAPTURE_DONE_MASK) {
-  //			break;
-  //		}
-  //	}
+
 
   	printf("filling the buffer...\r\n");
-  	HAL_Delay(10000);
+  	while (1) {
+  	  		status = OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER);
+  	  		if (status & CAPTURE_DONE_MASK) {
+  	  			break;
+  	  		}
+  	  	}
   	printf("done!\r\n");
 
 
@@ -347,7 +347,8 @@ int main(void)
   		while(!header_received && length > 0) {
   				last_byte = curr_byte;
   				buf[0] = 0;
-  				HAL_SPI_Receive(ov5462.hspi, buf, 1, 100);
+//  				HAL_SPI_Receive(ov5462.hspi, buf, 1, 100);
+  				SPI_OptimizedReadByte(buf);
   				curr_byte = buf[0];
 
   				if (curr_byte == 0xD8 && last_byte == 0xFF) {
