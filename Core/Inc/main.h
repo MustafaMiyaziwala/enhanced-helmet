@@ -57,10 +57,8 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define SD_CS_Pin GPIO_PIN_8
-#define SD_CS_GPIO_Port GPIOF
 /* USER CODE BEGIN Private defines */
-#define SD_SPI_HANDLE hspi3
+
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

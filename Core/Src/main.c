@@ -18,13 +18,11 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "fatfs.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
 #include "OV5462.h"
-#include <string.h>
 
 
 /* USER CODE END Includes */
@@ -49,15 +47,8 @@ I2C_HandleTypeDef hi2c2;
 UART_HandleTypeDef hlpuart1;
 
 SPI_HandleTypeDef hspi1;
-SPI_HandleTypeDef hspi3;
 
 /* USER CODE BEGIN PV */
-//FATFS fs;
-//FATFS * pfs;
-//FIL fil;
-//FRESULT fres;
-//DWORD fre_clust;
-//uint32_t total_space, free_space;
 
 /* USER CODE END PV */
 
@@ -67,75 +58,12 @@ static void MX_GPIO_Init(void);
 static void MX_LPUART1_UART_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_I2C2_Init(void);
-static void MX_SPI3_Init(void);
 /* USER CODE BEGIN PFP */
-int mountAndTestSD();
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-int mountAndTestSD() {
-//	if(f_mount(&fs, "", 0) != FR_OK) {
-//		printf("Failed to mount SD Card\r\n");
-//		return -1;
-//	}
-//
-//	/* Open file to write */
-//	if(f_open(&fil, "test.txt", FA_OPEN_ALWAYS | FA_READ | FA_WRITE) != FR_OK) {
-//		printf("Failed to open file\r\n");
-//		return -1;
-//	}
-//
-//	if(f_getfree("", &fre_clust, &pfs) != FR_OK) {
-//		printf("Free space check failed\r\n");
-//		return -1;
-//	}
-//
-//	total_space = (uint32_t)((pfs->n_fatent - 2) * pfs->csize * 0.5);
-//	free_space = (uint32_t)(fre_clust * pfs->csize * 0.5);
-//
-//	/* free space is less than 1kb */
-//	if(free_space < 1) {
-//		printf("Drive is full\r\n");
-//		return -1;
-//	}
-//
-//	printf("SD CARD MOUNTED! TESTING R/W...\r\n");
-//
-//	f_puts("TEST", &fil);
-//
-//	/* Close file */
-//	if(f_close(&fil) != FR_OK) {
-//		printf("Drive is full\r\n");
-//		return -1;
-//	}
-//
-//	/* Open file to read */
-//	if(f_open(&fil, "test.txt", FA_READ) != FR_OK) {
-//		printf("Failed to open in read mode\r\n");
-//		return -1;
-//	}
-//
-//	printf("PASSED: opening file in read mode\r\n");
-//
-//	char buffer[5];
-//	f_gets(buffer, sizeof(buffer), &fil);
-//
-//	if (strcmp(buffer, "TEST")) {
-//		printf("File contents MISMATCH. FAIL R/W test\r\n");
-//		return -1;
-//	}
-//
-//	printf("PASSED: read file contents\r\n");
-//
-//	/* Close file */
-//	if(f_close(&fil) != FR_OK) {
-//		printf("Failed to close\r\n");
-//		return -1;
-//	}
-
-	return 0;
-}
 
 /* USER CODE END 0 */
 
@@ -145,126 +73,37 @@ int mountAndTestSD() {
   */
 int main(void)
 {
-  /* USER CODE BEGIN 1 */
+	/* USER CODE BEGIN 1 */
 
-  /* USER CODE END 1 */
+	/* USER CODE END 1 */
 
-  /* MCU Configuration--------------------------------------------------------*/
+	/* MCU Configuration--------------------------------------------------------*/
 
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
+	/* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+	HAL_Init();
 
-  /* USER CODE BEGIN Init */
+	/* USER CODE BEGIN Init */
 
-  /* USER CODE END Init */
+	/* USER CODE END Init */
 
-  /* Configure the system clock */
-  SystemClock_Config();
+	/* Configure the system clock */
+	SystemClock_Config();
 
-  /* USER CODE BEGIN SysInit */
+	/* USER CODE BEGIN SysInit */
 
-  /* USER CODE END SysInit */
+	/* USER CODE END SysInit */
 
-  /* Initialize all configured peripherals */
-  MX_GPIO_Init();
-  MX_LPUART1_UART_Init();
-  MX_SPI1_Init();
-  MX_I2C2_Init();
-  MX_SPI3_Init();
-  MX_FATFS_Init();
-  /* USER CODE BEGIN 2 */
-
-  HAL_Delay(1000);
-
-  FATFS FatFs; 	//Fatfs handle
-    FIL fil; 		//File handle
-    FRESULT fres; //Result after operations
-
-    //Open the file system
-    fres = f_mount(&FatFs, "", 1); //1=mount now
-    if (fres != FR_OK) {
-  	printf("f_mount error (%i)\r\n", fres);
-  	while(1);
-    }
-
-    //Let's get some statistics from the SD card
-    DWORD free_clusters, free_sectors, total_sectors;
-
-    FATFS* getFreeFs;
-
-    fres = f_getfree("", &free_clusters, &getFreeFs);
-    if (fres != FR_OK) {
-  	printf("f_getfree error (%i)\r\n", fres);
-  	while(1);
-    }
-
-    //Formula comes from ChaN's documentation
-    total_sectors = (getFreeFs->n_fatent - 2) * getFreeFs->csize;
-    free_sectors = free_clusters * getFreeFs->csize;
-
-    printf("SD card stats:\r\n%10lu KiB total drive space.\r\n%10lu KiB available.\r\n", total_sectors / 2, free_sectors / 2);
-
-    //Now let's try to open file "test.txt"
-    fres = f_open(&fil, "test.txt", FA_READ);
-    if (fres != FR_OK) {
-  	printf("f_open error (%i)\r\n");
-  	while(1);
-    }
-    printf("I was able to open 'test.txt' for reading!\r\n");
-
-    //Read 30 bytes from "test.txt" on the SD card
-    BYTE readBuf[30];
-
-    //We can either use f_read OR f_gets to get data out of files
-    //f_gets is a wrapper on f_read that does some string formatting for us
-    TCHAR* rres = f_gets((TCHAR*)readBuf, 30, &fil);
-    if(rres != 0) {
-  	printf("Read string from 'test.txt' contents: %s\r\n", readBuf);
-    } else {
-  	printf("f_gets error (%i)\r\n", fres);
-    }
-
-    //Be a tidy kiwi - don't forget to close your file!
-    f_close(&fil);
-
-    //Now let's try and write a file "write.txt"
-    fres = f_open(&fil, "write.txt", FA_WRITE | FA_OPEN_ALWAYS | FA_CREATE_ALWAYS);
-    if(fres == FR_OK) {
-  	printf("I was able to open 'write.txt' for writing\r\n");
-    } else {
-  	printf("f_open error (%i)\r\n", fres);
-    }
-
-    //Copy in a string
-    strncpy((char*)readBuf, "a new file is made!", 19);
-    UINT bytesWrote;
-    fres = f_write(&fil, readBuf, 19, &bytesWrote);
-    if(fres == FR_OK) {
-  	printf("Wrote %i bytes to 'write.txt'!\r\n", bytesWrote);
-    } else {
-  	printf("f_write error (%i)\r\n");
-    }
-
-    //Be a tidy kiwi - don't forget to close your file!
-    f_close(&fil);
-
-    //We're done, so de-mount the drive
-    f_mount(NULL, "", 0);
-
+	/* Initialize all configured peripherals */
+	MX_GPIO_Init();
+	MX_LPUART1_UART_Init();
+	MX_SPI1_Init();
+	MX_I2C2_Init();
+	/* USER CODE BEGIN 2 */
 	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
 	uint8_t buf[1] = { 0x00 }; // dummy write
 	HAL_SPI_Transmit(&hspi1, buf, 1, 100);
 
 	OV5462_t ov5462 = { &hi2c2, &hspi1 };
-
-	HAL_Delay(500);
-
-	if (mountAndTestSD()) {
-		printf("SD Mount and Test FAIL! Aborting...\r\n");
-		return 0;
-	} else {
-		printf("SD Mount and Test PASS!");
-	}
 
 	HAL_Delay(1000);
 
@@ -273,10 +112,10 @@ int main(void)
 		uint8_t tmp = OV5462_read_spi_reg(&ov5462, 0x00);
 
 		if (tmp == 0x25) {
-		printf("SPI Test PASS!\r\n");
+		printf("SPI Test PASS!\n");
 		break; // continue to program
 		} else {
-		printf("SPI Test FAIL!\r\n");
+		printf("SPI Test FAIL!\n");
 		HAL_Delay(1000);
 		}
 	}
@@ -286,10 +125,10 @@ int main(void)
 		uint8_t lower = OV5462_read_i2c_reg(&ov5462, CHIPID_LOWER);
 
 		if (upper == 0x56 && lower == 0x42) {
-			printf("I2C Test PASS!\r\n");
+			printf("I2C Test PASS!\n");
 			break; // continue to program
 		} else {
-			printf("I2C Test FAIL!\r\n");
+			printf("I2C Test FAIL!\n");
 			HAL_Delay(1000);
 		}
 	}
@@ -303,10 +142,10 @@ int main(void)
 	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_START_MASK); // start capture
 
 
-  /* USER CODE END 2 */
+	/* USER CODE END 2 */
 
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
+	/* Infinite loop */
+	/* USER CODE BEGIN WHILE */
 	while (1)
 	{
 		uint8_t image_buf[256];
@@ -314,7 +153,7 @@ int main(void)
 		if (status & CAPTURE_DONE_MASK) {
 			int length = (int) OV5462_read_fifo_length(&ov5462);
 			if (length >= MAX_FIFO_LENGTH || length == 0) {
-				printf("FIFO length ERROR\r\n");
+				printf("FIFO length ERROR\n");
 				break;
 			}
 
@@ -373,13 +212,13 @@ int main(void)
 			break;
 		}
 	}
-    /* USER CODE END WHILE */
+	/* USER CODE END WHILE */
 
-    /* USER CODE BEGIN 3 */
+	/* USER CODE BEGIN 3 */
 	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
 	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK);
 
-  /* USER CODE END 3 */
+	/* USER CODE END 3 */
 }
 
 /**
@@ -559,46 +398,6 @@ static void MX_SPI1_Init(void)
 }
 
 /**
-  * @brief SPI3 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_SPI3_Init(void)
-{
-
-  /* USER CODE BEGIN SPI3_Init 0 */
-
-  /* USER CODE END SPI3_Init 0 */
-
-  /* USER CODE BEGIN SPI3_Init 1 */
-
-  /* USER CODE END SPI3_Init 1 */
-  /* SPI3 parameter configuration*/
-  hspi3.Instance = SPI3;
-  hspi3.Init.Mode = SPI_MODE_MASTER;
-  hspi3.Init.Direction = SPI_DIRECTION_2LINES;
-  hspi3.Init.DataSize = SPI_DATASIZE_8BIT;
-  hspi3.Init.CLKPolarity = SPI_POLARITY_LOW;
-  hspi3.Init.CLKPhase = SPI_PHASE_1EDGE;
-  hspi3.Init.NSS = SPI_NSS_SOFT;
-  hspi3.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;
-  hspi3.Init.FirstBit = SPI_FIRSTBIT_MSB;
-  hspi3.Init.TIMode = SPI_TIMODE_DISABLE;
-  hspi3.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
-  hspi3.Init.CRCPolynomial = 7;
-  hspi3.Init.CRCLength = SPI_CRC_LENGTH_DATASIZE;
-  hspi3.Init.NSSPMode = SPI_NSS_PULSE_ENABLE;
-  if (HAL_SPI_Init(&hspi3) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN SPI3_Init 2 */
-
-  /* USER CODE END SPI3_Init 2 */
-
-}
-
-/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -619,7 +418,7 @@ static void MX_GPIO_Init(void)
   HAL_PWREx_EnableVddIO2();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOF, SD_CS_Pin|GPIO_PIN_9, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_9, GPIO_PIN_RESET);
 
   /*Configure GPIO pins : PE2 PE3 */
   GPIO_InitStruct.Pin = GPIO_PIN_2|GPIO_PIN_3;
@@ -637,8 +436,8 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Alternate = GPIO_AF13_SAI1;
   HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : SD_CS_Pin PF9 */
-  GPIO_InitStruct.Pin = SD_CS_Pin|GPIO_PIN_9;
+  /*Configure GPIO pin : PF9 */
+  GPIO_InitStruct.Pin = GPIO_PIN_9;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -807,6 +606,14 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
   GPIO_InitStruct.Alternate = GPIO_AF7_USART2;
   HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : PB3 PB4 PB5 */
+  GPIO_InitStruct.Pin = GPIO_PIN_3|GPIO_PIN_4|GPIO_PIN_5;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  GPIO_InitStruct.Alternate = GPIO_AF6_SPI3;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pins : PB8 PB9 */
   GPIO_InitStruct.Pin = GPIO_PIN_8|GPIO_PIN_9;
