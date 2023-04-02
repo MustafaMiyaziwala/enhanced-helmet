@@ -105,7 +105,7 @@ int testSD() {
 		return -1;
 	}
 
-	printf("SD CARD MOUNTED! TESTING R/W...\r\n");
+//	printf("SD CARD MOUNTED! TESTING R/W...\r\n");
 
 	f_puts("TEST", &fil);
 
@@ -121,8 +121,6 @@ int testSD() {
 		return -1;
 	}
 
-	printf("PASSED: opening file in read mode\r\n");
-
 	char buffer[5];
 	f_gets(buffer, sizeof(buffer), &fil);
 
@@ -131,12 +129,16 @@ int testSD() {
 		return -1;
 	}
 
-	printf("PASSED: read file contents\r\n");
+//	printf("PASSED: read file contents\r\n");
 
 	/* Close file */
 	if(f_close(&fil) != FR_OK) {
 		printf("Failed to close\r\n");
 		return -1;
+	}
+
+	if(f_unlink("test.txt") != FR_OK) {
+		printf("Failed to delete test file \r\n");
 	}
 
 	return 0;
@@ -192,7 +194,10 @@ int main(void)
 	HAL_Delay(1000);
 
 	if(testSD()) {
+		printf("SD test FAIL! Aborting...\r\n");
 		return 0;
+	} else {
+		printf("SD test PASS!\r\n");
 	}
 
 	while (1) {
@@ -200,10 +205,10 @@ int main(void)
 		uint8_t tmp = OV5462_read_spi_reg(&ov5462, 0x00);
 
 		if (tmp == 0x25) {
-		printf("SPI Test PASS!\n");
+		printf("SPI Test PASS!\r\n");
 		break; // continue to program
 		} else {
-		printf("SPI Test FAIL!\n");
+		printf("SPI Test FAIL!\r\n");
 		HAL_Delay(1000);
 		}
 	}
@@ -213,10 +218,10 @@ int main(void)
 		uint8_t lower = OV5462_read_i2c_reg(&ov5462, CHIPID_LOWER);
 
 		if (upper == 0x56 && lower == 0x42) {
-			printf("I2C Test PASS!\n");
+			printf("I2C Test PASS!\r\n");
 			break; // continue to program
 		} else {
-			printf("I2C Test FAIL!\n");
+			printf("I2C Test FAIL!\r\n");
 			HAL_Delay(1000);
 		}
 	}
@@ -227,17 +232,21 @@ int main(void)
 	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK);
 	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FRAMES, 0x00);
 
+	f_open(&fil, "image.jpg", FA_OPEN_ALWAYS | FA_READ | FA_WRITE);
+
 	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_START_MASK); // start capture
-
-
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 	while (1)
 	{
-		uint8_t image_buf[256];
+		uint8_t image_buf[4096];
 		uint8_t status = OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER);
+
+		uint bw;
+		FRESULT fr;
+
 		if (status & CAPTURE_DONE_MASK) {
 			int length = (int) OV5462_read_fifo_length(&ov5462);
 			if (length >= MAX_FIFO_LENGTH || length == 0) {
@@ -264,13 +273,15 @@ int main(void)
 				curr_byte = buf[0];
 
 				if (header_received) {
-					if (i < 256) {
+					if (i < 4096) {
 						image_buf[i++] = curr_byte;
 					} else {
 						HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
-						for (int j = 0; j < i; ++j) {
-							printf("%02X", image_buf[j]);
-						}
+						fr = f_write(&fil, image_buf, sizeof(uint8_t)*i, &bw);
+						if (fr) printf("ERROR (%i)", fr);
+//						for (int j = 0; j < i; ++j) {
+//							printf("%02X", image_buf[j]);
+//						}
 
 						HAL_Delay(5);
 						i = 0;
@@ -291,11 +302,20 @@ int main(void)
 				}
 			}
 
-			for (int j = 0; j < i; ++j) {
-				printf("%02X", image_buf[j]);
-			}
+			fr = f_write(&fil, image_buf, sizeof(uint8_t)*i, &bw);
+			if (fr) printf("ERROR (%i)", fr);
 
-			printf("\n%d", i);
+			f_close(&fil);
+
+			printf("Saved image successfully\r\n");
+
+//			for (int j = 0; j < i; ++j) {
+//				printf("%02X", image_buf[j]);
+//			}
+
+			if(f_mount(NULL, "", 1) != FR_OK)
+				printf("Failed to unmount\r\n");
+
 
 			break;
 		}
@@ -468,7 +488,7 @@ static void MX_SPI1_Init(void)
   hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi1.Init.NSS = SPI_NSS_SOFT;
-  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_64;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
   hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
