@@ -51,6 +51,8 @@
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+extern uint16_t Timer1, Timer2;
+
 
 /* USER CODE END 0 */
 
@@ -183,6 +185,11 @@ void PendSV_Handler(void)
 void SysTick_Handler(void)
 {
   /* USER CODE BEGIN SysTick_IRQn 0 */
+	if(Timer1 > 0)
+			Timer1--;
+
+		if(Timer2 > 0)
+			Timer2--;
 
   /* USER CODE END SysTick_IRQn 0 */
   HAL_IncTick();
