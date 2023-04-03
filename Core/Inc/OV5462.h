@@ -29,7 +29,7 @@
 #define FIFO_SIZE_MIDDLE 0x43
 #define FIFO_SIZE_UPPER 0x44 // only two bits
 
-#define MAX_FIFO_LENGTH 0x5FFFF
+#define MAX_FIFO_LENGTH 0x7FFFFF
 #define BURST_FIFO_READ 0x3C
 
 

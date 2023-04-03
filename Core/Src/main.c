@@ -35,6 +35,8 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define CHUNK_SIZE 512
+#define AVIOFFSET 240
+#define   rate     0x0a
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -60,6 +62,30 @@ FIL fil;
 FRESULT fres;
 DWORD fre_clust;
 uint32_t total_space, free_space;
+OV5462_t ov5462;
+
+int is_header = 0;
+uint bw;
+unsigned long movi_size = 0;
+unsigned long jpeg_size = 0;
+const char zero_buf[4] = {0x00, 0x00, 0x00, 0x00};
+const int avi_header[AVIOFFSET] = {
+  0x52, 0x49, 0x46, 0x46, 0xD8, 0x01, 0x0E, 0x00, 0x41, 0x56, 0x49, 0x20, 0x4C, 0x49, 0x53, 0x54,
+  0xD0, 0x00, 0x00, 0x00, 0x68, 0x64, 0x72, 0x6C, 0x61, 0x76, 0x69, 0x68, 0x38, 0x00, 0x00, 0x00,
+  0xA0, 0x86, 0x01, 0x00, 0x80, 0x66, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00,
+  0x64, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x80, 0x02, 0x00, 0x00, 0xe0, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x4C, 0x49, 0x53, 0x54, 0x84, 0x00, 0x00, 0x00,
+  0x73, 0x74, 0x72, 0x6C, 0x73, 0x74, 0x72, 0x68, 0x30, 0x00, 0x00, 0x00, 0x76, 0x69, 0x64, 0x73,
+  0x4D, 0x4A, 0x50, 0x47, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x01, 0x00, 0x00, 0x00, rate, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0A, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x73, 0x74, 0x72, 0x66,
+  0x28, 0x00, 0x00, 0x00, 0x28, 0x00, 0x00, 0x00, 0x80, 0x02, 0x00, 0x00, 0xe0, 0x01, 0x00, 0x00,
+  0x01, 0x00, 0x18, 0x00, 0x4D, 0x4A, 0x50, 0x47, 0x00, 0x84, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x4C, 0x49, 0x53, 0x54,
+  0x10, 0x00, 0x00, 0x00, 0x6F, 0x64, 0x6D, 0x6C, 0x64, 0x6D, 0x6C, 0x68, 0x04, 0x00, 0x00, 0x00,
+  0x64, 0x00, 0x00, 0x00, 0x4C, 0x49, 0x53, 0x54, 0x00, 0x01, 0x0E, 0x00, 0x6D, 0x6F, 0x76, 0x69,
+};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -80,13 +106,13 @@ static void MX_SPI1_Init(void);
 int testSD() {
 /* Mount SD Card */
 	int ret = 0;
-	if(f_mount(&fs, "", 0) != FR_OK) {
+	if(f_mount(&fs, "/", 0) != FR_OK) {
 		printf("Failed to mount SD Card\r\n");
 		return -1;
 	}
 
 	/* Open file to write */
-	ret = f_open(&fil, "test.txt", FA_OPEN_ALWAYS | FA_READ | FA_WRITE);
+	ret = f_open(&fil, "/TEST.TXT", FA_OPEN_ALWAYS | FA_READ | FA_WRITE);
 	if(ret != FR_OK) {
 		printf("Failed to open file (%i) \r\n", ret);
 		return -1;
@@ -111,14 +137,16 @@ int testSD() {
 	f_puts("TEST", &fil);
 
 	/* Close file */
-	if(f_close(&fil) != FR_OK) {
-		printf("Drive is full\r\n");
+	ret = f_close(&fil);
+	if(ret != FR_OK) {
+		printf("Failed to close file (%i) \r\n", ret);
 		return -1;
 	}
 
 	/* Open file to read */
-	if(f_open(&fil, "test.txt", FA_READ) != FR_OK) {
-		printf("Failed to open in read mode\r\n");
+	ret = f_open(&fil, "/TEST.TXT", FA_READ);
+	if(ret != FR_OK) {
+		printf("Failed to open in read mode (%i) \r\n", ret);
 		return -1;
 	}
 
@@ -143,6 +171,176 @@ int testSD() {
 	}
 
 	return 0;
+}
+
+void write_quartet(unsigned long i) {
+	FRESULT fr;
+
+	uint8_t buf[1];
+	buf[0] = i % 0x100;
+	fr = f_write(&fil, buf, sizeof(uint8_t), &bw);
+	if (fr) printf("quart %i\r\n", fr);
+	i = i >> 8;
+
+	buf[0] = i % 0x100;
+	fr = f_write(&fil, buf, sizeof(uint8_t), &bw);
+	if (fr) printf("quart%i\r\n", fr);
+	i = i >> 8;
+
+	buf[0] = i % 0x100;
+	fr = f_write(&fil, buf, sizeof(uint8_t), &bw);
+	if (fr) printf("quart%i\r\n", fr);
+	i = i >> 8;
+
+	buf[0] = i % 0x100;
+	fr = f_write(&fil, buf, sizeof(uint8_t), &bw);
+	if (fr) printf("quart%i\r\n", fr);
+}
+
+int read_fifo_and_write_file() {
+	uint8_t temp=0, temp_last=0;
+	uint32_t length = 0;
+	static int i = 0;
+	static int k = 0;
+	unsigned long position = 0;
+	uint16_t frame_cnt = 0;
+	uint8_t remnant = 0;
+	char str[8];
+	uint8_t buf[256];
+	FRESULT fr;
+
+	length = OV5462_read_fifo_length(&ov5462);
+	printf("Buffer length: %u\r\n", length);
+
+	if (length >= MAX_FIFO_LENGTH) {
+		printf("Buffer too large\r\n");
+		return -1;
+	}
+
+	if (length == 0) {
+		printf("Buffer empty\r\n");
+		return -1;
+	}
+
+	movi_size = 0;
+
+
+	fr = f_open(&fil, "/COOL.AVI", FA_OPEN_ALWAYS | FA_READ | FA_WRITE);
+	if (fr) {
+		printf("couldn't open file (%i)", fr);
+		return -1;
+	}
+
+	for (i = 0; i < AVIOFFSET; ++i) {
+		buf[i] = avi_header[i];
+	}
+
+	fr = f_write(&fil, buf, sizeof(uint8_t)*(AVIOFFSET), &bw);
+	if (fr) printf("%i\r\n", fr);
+	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
+	buf[0] = BURST_FIFO_READ;
+	HAL_SPI_Transmit(ov5462.hspi, buf, 1, 100); // send FIFO burst command
+
+	i = 0;
+
+	while (length--) {
+		temp_last = temp;
+		SPI_OptimizedReadByte(&temp);
+
+		if ((temp == 0xD9) && (temp == 0xFF)) { // end of image
+			buf[i++] = temp;
+			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
+			fr = f_write(&fil, buf, sizeof(uint8_t)*i, &bw);
+			if (fr) return fr;
+			jpeg_size += i;
+			remnant =  (4 - (jpeg_size & 0x00000003)) & 0x00000003;
+			jpeg_size = jpeg_size + remnant;
+			movi_size += jpeg_size;
+			if (remnant > 0) {
+				f_write(&fil, zero_buf, sizeof(uint8_t)*remnant, &bw);
+			}
+
+			position = f_tell(&fil);
+			fr = f_lseek(&fil, position - 4 - jpeg_size);
+			if (fr) return fr;
+			write_quartet(jpeg_size);
+
+			position = f_tell(&fil);
+			fr = f_lseek(&fil, position + 6);
+			if (fr) return fr;
+			f_puts("AVI1", &fil);
+			position = f_tell(&fil);
+
+			fr = f_lseek(&fil, position + jpeg_size - 10);
+			if (fr) return fr;
+			is_header = 0;
+			frame_cnt++;
+			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
+			buf[0] = BURST_FIFO_READ;
+			HAL_SPI_Transmit(ov5462.hspi, buf, 1, 100); // send FIFO burst command
+		}
+
+		if (is_header) {
+			if (i < 256) {
+				buf[i++] = temp;
+			} else {
+				HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
+				fr = f_write(&fil, buf, sizeof(uint8_t)*256, &bw);
+				if (fr) return fr;
+				i = 0;
+				buf[i++] = temp;
+				HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
+				buf[0] = BURST_FIFO_READ;
+				HAL_SPI_Transmit(ov5462.hspi, buf, 1, 100); // send FIFO burst command
+				jpeg_size += 256;
+			}
+		} else if ((temp == 0xD8) && (temp_last == 0xFF)) {
+			is_header = 1;
+			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
+			f_puts("00dc", &fil);
+			fr = f_write(&fil, zero_buf, sizeof(uint8_t)*4, &bw);
+			if (fr) return fr;
+			i = 0;
+			jpeg_size = 0;
+			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
+			buf[0] = BURST_FIFO_READ;
+			HAL_SPI_Transmit(ov5462.hspi, buf, 1, 100); // send FIFO burst command
+			buf[i++] = temp_last;
+			buf[i++] = temp;
+
+		}
+	}
+
+	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
+	fr = f_lseek(&fil, 4);
+	if (fr) return fr;
+	write_quartet(movi_size + 12*frame_cnt+4);
+	unsigned long us_per_frame = 1000000 / rate;
+	fr = f_lseek(&fil, 0x20);
+	if (fr) return fr;
+	write_quartet(us_per_frame);
+	unsigned long max_bytes_per_sec = movi_size * rate/ frame_cnt;
+	fr = f_lseek(&fil, 0x24);
+	if (fr) return fr;
+	write_quartet(max_bytes_per_sec);
+	unsigned long tot_frames = frame_cnt;
+	fr = f_lseek(&fil, 0x30);
+	if (fr) return fr;
+	write_quartet(tot_frames);
+
+	unsigned long frames = frame_cnt;
+	fr = f_lseek(&fil, 0xe0);
+	if (fr) return fr;
+	write_quartet(frames);
+	fr = f_lseek(&fil, 0xe8);
+	if (fr) return fr;
+	write_quartet(movi_size);
+	is_header = 0;
+
+	return 0;
+
+
+
 }
 
 /* USER CODE END 0 */
@@ -187,7 +385,10 @@ int main(void)
   	uint8_t buf[1] = { 0x00 }; // dummy write
   	HAL_SPI_Transmit(&hspi1, buf, 1, 100);
 
-  	OV5462_t ov5462 = { &hi2c1, &hspi1 };
+  	ov5462.hi2c = &hi2c1;
+	ov5462.hspi = &hspi1;
+
+	FRESULT fr;
 
   	HAL_Delay(1000);
 
@@ -224,244 +425,59 @@ int main(void)
   		}
   	}
 
+  	// camera init (sets to JPEG mode)
   	if (OV5462_init(&ov5462)) {
-  		printf("Init fail!");
+  		printf("Init fail!\r\n");
   	}
+
+  	// clear fifo
   	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK);
-  	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FRAMES, 0x07);
 
+  	uint8_t camera_version = OV5462_read_spi_reg(&ov5462, 0x40);
+  	printf("Camera version: %u\r\n", camera_version);
+  	uint8_t frames;
 
-
-  	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_START_MASK); // start capture
-
-  	uint8_t image_buf[CHUNK_SIZE];
-  	uint8_t status;
-
-  	uint bw;
-  	FRESULT fr;
-
-  	int image_num = 0;
-
-
-
-  	printf("filling the buffer...\r\n");
-  	while (1) {
-  	  		status = OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER);
-  	  		if (status & CAPTURE_DONE_MASK) {
-  	  			break;
-  	  		}
-  	  	}
-  	printf("done!\r\n");
-
-
-  	int length = (int) OV5462_read_fifo_length(&ov5462);
-  	if (length >= MAX_FIFO_LENGTH || length == 0) {
-  		printf("FIFO length ERROR\n");
-  		return -1;
+  	// set continuous capture (depends on version)
+  	if (camera_version && 0x70) {
+  		frames = 0xFF;
+  	} else {
+  		frames = 0x07;
   	}
 
-  	printf("%d bytes\r\n", length);
+  	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FRAMES, frames);
 
-  	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET); // chip select LOW
-  	buf[0] = BURST_FIFO_READ;
-  	HAL_SPI_Transmit(ov5462.hspi, buf, 1, 100); // send FIFO burst command
+  	int is_capture_flag = 1;
 
-  	uint8_t curr_byte = 0;
-  	uint8_t last_byte = 0;
+	if (is_capture_flag) {
+	  OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK); // flush
+	  OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK); // clear flag
 
-  	uint8_t header_received = 0;
-  	int i = 0; // buffer index
+	  OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_START_MASK); // start capture
 
-  	while (length > 0) { // the FIFO buffer will contain multiple images
-  		int len = snprintf(NULL, 0, "%d.jpg", image_num);
-  		char* filename = malloc(len+1);
-  		snprintf(filename, len+1, "%d.jpg", image_num);
-  		printf("%s\r\n", filename);
+	  while (!(OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER) & CAPTURE_DONE_MASK)) {};
+	  int length = (int) OV5462_read_fifo_length(&ov5462);
 
-  		f_open(&fil, filename, FA_OPEN_ALWAYS | FA_READ | FA_WRITE);
-  		int image_start_idx = 0;
-  		if (i > 0) { // leftover from last chunk of prev image
-  			if (i % 2 != 0) i--;
-  			for (int j = i; j < CHUNK_SIZE; j += 2) {
-  				if (image_buf[j] == 0xD8) {
-  					if (j > 0 && image_buf[j-1] == 0xFF) {
-  						image_start_idx = j-1;
-  						header_received = 1;
-  						break;
-  					}
-  				} else if (image_buf[j] == 0xFF) {
-  					if (j < CHUNK_SIZE-1 && image_buf[j+1] == 0xD8) {
-  						image_start_idx = j;
-  						header_received = 1;
-  						break;
-  					}
-  				}
-  			}
-  			last_byte = image_buf[CHUNK_SIZE-1];
-  			length -= CHUNK_SIZE - i;
+	  if (length < 0x3FFFFF) {
+		  OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK); // flush
+		  OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK); // clear flag
 
-  			if (header_received) {
-  				fr = f_write(&fil, &image_buf[image_start_idx], sizeof(uint8_t)*(CHUNK_SIZE - image_start_idx), &bw);
-  				if (fr) printf("ERROR (%i)", fr);
-  			}
-  		} else {
-  			last_byte = 0;
-  		}
+		  OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_START_MASK); // start capture
+		  while (!(OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER) & CAPTURE_DONE_MASK)) {};
+		  printf("Capture done\r\n");
+	  } else {
+		  printf("Capture done\r\n");
+	  }
 
-  		i = 0;
+	  int why = read_fifo_and_write_file();
+	  if (why) {
+		  printf("movie save failed (%i) \r\n", why);
+	  } else {
+		  printf("movie save success \r\n");
+	  }
 
-  //		while (!header_received && length > 0) { // the leftover data didn't have a header. get a new chunk (it's very unlikely this loop would need to run more than once?)
-  //			HAL_SPI_Receive(ov5462.hspi, &image_buf[0], CHUNK_SIZE, 100);
-  //			length -= CHUNK_SIZE;
-  //
-  //			if (last_byte == 0xFF && image_buf[0] == 0xD8) { // handle edge case where the header breaks between chunks
-  //				header_received = 1;
-  //				image_start_idx = 0;
-  //				uint8_t tmp_buf[1];
-  //				tmp_buf[0] = last_byte;
-  //				fr = f_write(&fil, tmp_buf, sizeof(uint8_t), &bw);
-  //				if (fr) printf("ERROR (%i)", fr);
-  //			} else {
-  //				for (int j = 0; j < CHUNK_SIZE; j += 2) {
-  //					if (image_buf[j] == 0xD8) {
-  //						if (j > 0 && image_buf[j-1] == 0xFF) {
-  //							image_start_idx = j;
-  //							header_received = 1;
-  //							break;
-  //						}
-  //					} else if (image_buf[j] == 0xFF) {
-  //						if (j < CHUNK_SIZE-1 && image_buf[j+1] == 0xD8) {
-  //							image_start_idx = j-1;
-  //							header_received = 1;
-  //							break;
-  //						}
-  //					}
-  //				}
-  //				last_byte = image_buf[CHUNK_SIZE-1];
-  //			}
-  //		}
-  //
-  //		fr = f_write(&fil, &image_buf[image_start_idx], sizeof(uint8_t)*(CHUNK_SIZE - image_start_idx), &bw);
-  //		if (fr) printf("ERROR (%i)", fr);
-
-  		while(!header_received && length > 0) {
-  				last_byte = curr_byte;
-  				buf[0] = 0;
-//  				HAL_SPI_Receive(ov5462.hspi, buf, 1, 100);
-  				SPI_OptimizedReadByte(buf);
-  				curr_byte = buf[0];
-
-  				if (curr_byte == 0xD8 && last_byte == 0xFF) {
-  					header_received = 1;
-  					image_buf[i++] = last_byte;
-  					image_buf[i++] = curr_byte;
-  					i = 2;
-  					length -= 2;
-  				}
-  		}
-
-
-
-  		printf("Header received\r\n");
-
-  		int eof_received = 0;
-  		last_byte = 0;
-
-  		while (!eof_received && length > 0) {
-  			int next_chunk_size = CHUNK_SIZE - i;
-  			if (length < CHUNK_SIZE) {
-  				next_chunk_size = length;
-  			}
-
-  			HAL_SPI_Receive(ov5462.hspi, &image_buf[i], next_chunk_size, 100);
-  			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
-
-  			int valid_data_size = CHUNK_SIZE;
-
-  			if (last_byte == 0xFF && image_buf[0] == 0xD9) { // handle edge case where the EOF breaks between chunks
-  				valid_data_size = 1;
-  				eof_received = 1;
-  			} else {
-  				for (int j = 0; j < CHUNK_SIZE; j += 2) {
-  					if (image_buf[j] == 0xD9) {
-  						if (j > 0 && image_buf[j-1] == 0xFF) {
-  							valid_data_size = j+1; // offset 1 for 0 index
-  							eof_received = 1;
-  							break;
-  						}
-  					} else if (image_buf[j] == 0xFF) {
-  						if (j < CHUNK_SIZE-1 && image_buf[j+1] == 0xD9) {
-  							valid_data_size = j+2; // offset 1 for 0 index, another for the next byte
-  							eof_received = 1;
-  							break;
-  						}
-  					}
-  				}
-  			}
-
-  			fr = f_write(&fil, image_buf, sizeof(uint8_t)*valid_data_size, &bw);
-  			if (fr) printf("ERROR (%i)", fr);
-
-  			last_byte = image_buf[CHUNK_SIZE-1];
-
-  			if (eof_received) {
-  				i = valid_data_size; // we still need to process the rest of this chunk in case it includes the next image
-  			} else {
-  				i = 0;
-  			}
-  			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
-  			buf[0] = BURST_FIFO_READ;
-  			HAL_SPI_Transmit(ov5462.hspi, buf, 1, 100); // send FIFO burst command
-  			length -= valid_data_size;
-  		}
-
-  		if (eof_received) {
-  			printf("EOF\r\n");
-  		} else {
-  			printf("error\r\n");
-  		}
-
-  		eof_received = 0;
-  		header_received = 0;
-
-  		f_close(&fil);
-  		printf("Saved image successfully\r\n");
-  		++image_num;
-  	}
-
-  	printf("finished reading buffer!\r\n");
-
-  //	printf("Last chunk...\r\n");
-  //
-  //	i = 0;
-  //	last_byte = 0;
-  //	curr_byte = 0;
-  //
-  //
-  ////	HAL_SPI_Receive(ov5462.hspi, &image_buf[0], length, 100);
-  //	while (!eof_received) {
-  //		last_byte = curr_byte;
-  //		buf[0] = 0;
-  //		HAL_SPI_Receive(ov5462.hspi, buf, 1, 100);
-  //		curr_byte = buf[0];
-  //		image_buf[i++] = curr_byte;
-  //
-  //		if (curr_byte == 0xD9 && last_byte == 0xFF) {
-  //			eof_received = 1;
-  //		}
-  //	}
-  //
-  //	printf("EOF received...\r\n");
-  //
-  //	fr = f_write(&fil, image_buf, sizeof(uint8_t)*length, &bw);
-  //
-  //	if (fr) printf("ERROR (%i)", fr);
-
-
-
-  //			for (int j = 0; j < i; ++j) {
-  //				printf("%02X", image_buf[j]);
-  //			}
+	  fr = f_close(&fil);
+	  if (fr) printf("%i\r\n", fr);
+	 }
 
   	if(f_mount(NULL, "", 1) != FR_OK)
   		printf("Failed to unmount\r\n");
@@ -672,7 +688,7 @@ static void MX_SPI2_Init(void)
   hspi2.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi2.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi2.Init.NSS = SPI_NSS_SOFT;
-  hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8;
+  hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;
   hspi2.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi2.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi2.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
