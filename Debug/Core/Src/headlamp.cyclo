@@ -1,0 +1,2 @@
+headlamp.c:6:6:toggle_headlamp	3
+headlamp.c:23:6:HAL_TIM_PeriodElapsedCallback	2

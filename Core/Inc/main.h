@@ -81,6 +81,10 @@ void Error_Handler(void);
 #define DAC_SPI2_CS_GPIO_Port GPIOB
 #define SD_SPI2_SCK_Pin GPIO_PIN_10
 #define SD_SPI2_SCK_GPIO_Port GPIOB
+#define XBEE_USART_TX_Pin GPIO_PIN_9
+#define XBEE_USART_TX_GPIO_Port GPIOA
+#define XBEE_USART_RX_Pin GPIO_PIN_10
+#define XBEE_USART_RX_GPIO_Port GPIOA
 #define TMS_Pin GPIO_PIN_13
 #define TMS_GPIO_Port GPIOA
 #define TCK_Pin GPIO_PIN_14

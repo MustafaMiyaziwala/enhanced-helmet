@@ -1,0 +1,6 @@
+xbee.c:8:6:XBee_Transmit	1
+xbee.c:12:6:XBee_Receive	1
+xbee.c:16:6:XBee_Resolve	7
+xbee.c:34:6:XBee_Init	1
+xbee.c:40:6:HAL_UART_TxCpltCallback	1
+xbee.c:44:6:HAL_UART_RxCpltCallback	2
