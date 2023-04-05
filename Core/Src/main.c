@@ -358,22 +358,43 @@ int read_fifo_and_write_jpeg_files() {
 
 	f_open(&fil, "VIDEO.DAT", FA_OPEN_ALWAYS | FA_READ | FA_WRITE);
 
+	unsigned long optimizedCamReads = 0;
+	unsigned long sdWrites = 0;
+	unsigned long long regularCamReads = 0;
+
+	uint32_t t1;
+	uint32_t t2;
+
 	i = 0;
 
 	while (length--) {
 		temp_last = temp;
+
+		t1 = HAL_GetTick();
 		SPI_OptimizedReadByte(&temp);
+		t2 = HAL_GetTick();
+
+		optimizedCamReads += (t2 - t1);
 
 		if ((temp == 0xD9) && (temp_last == 0xFF)) { // end of image
 			buf[i++] = temp;
 			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
+
+			t1 = HAL_GetTick();
 			f_write(&fil, buf, sizeof(uint8_t)*i, &bw);
+			t2 = HAL_GetTick();
+
+			sdWrites += (t2-t1);
 //			f_close(&fil);
 
 			is_header = 0;
 
 			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
+
+			t1 = HAL_GetTick();
 			OV5462_request_FIFO_burst(&ov5462); // send FIFO burst command
+			t2 = HAL_GetTick();
+			regularCamReads += (t2-t1);
 		}
 
 		if (is_header) {
@@ -381,11 +402,20 @@ int read_fifo_and_write_jpeg_files() {
 				buf[i++] = temp;
 			} else {
 				HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
+
+				t1 = HAL_GetTick();
 				f_write(&fil, buf, sizeof(uint8_t)*CHUNK_SIZE, &bw);
+				t2 = HAL_GetTick();
+
+				sdWrites += (t2-t1);
 				i = 0;
 				buf[i++] = temp;
 				HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
+
+				t1 = HAL_GetTick();
 				OV5462_request_FIFO_burst(&ov5462); // send FIFO burst command
+				t2 = HAL_GetTick();
+				regularCamReads += (t2-t1);
 			}
 		} else if ((temp == 0xD8) && (temp_last == 0xFF)) { // start of new image
 			is_header = 1;
@@ -400,7 +430,12 @@ int read_fifo_and_write_jpeg_files() {
 //			free(filename);
 			i = 0;
 			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
+
+			t1 = HAL_GetTick();
 			OV5462_request_FIFO_burst(&ov5462); // send FIFO burst command
+			t2 = HAL_GetTick();
+			regularCamReads += (t2-t1);
+
 			buf[i++] = temp_last;
 			buf[i++] = temp;
 		}
@@ -408,6 +443,10 @@ int read_fifo_and_write_jpeg_files() {
 
 	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
 	is_header = 0;
+
+	printf("opt: %lu\r\n", optimizedCamReads);
+	printf("sd: %lu\r\n", sdWrites);
+	printf("reg: %llu\r\n", regularCamReads);
 
 	return 0;
 }
