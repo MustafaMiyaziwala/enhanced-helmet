@@ -105,6 +105,11 @@ uint32_t OV5462_read_fifo_length(OV5462_t* ov5462) {
 	return ((upper << 16) | (middle << 8) | lower) & 0x07fffff;
 }
 
+void OV5462_request_FIFO_burst(OV5462_t* ov5462) {
+	uint8_t buf[1] = { BURST_FIFO_READ };
+	HAL_SPI_Transmit(ov5462->hspi, buf, 1, 100);
+}
+
 void SPI_OptimizedReadByte(uint8_t* data) {
 	while (((SPI1->SR)&(1>>7))) {}; // wait for BSY bit to reset
 	SPI1->DR = 0; // dummy byte

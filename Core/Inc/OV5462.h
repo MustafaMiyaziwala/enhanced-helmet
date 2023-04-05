@@ -58,6 +58,7 @@ void OV5462_write_spi_reg(OV5462_t* ov5462, uint8_t addr, uint8_t data);
 uint8_t OV5462_read_spi_reg(OV5462_t* ov5462, uint8_t addr);
 void OV5462_clear_fifo(OV5462_t*);
 uint32_t OV5462_read_fifo_length(OV5462_t*);
+void OV5462_request_FIFO_burst(OV5462_t*);
 void SPI_OptimizedReadByte(uint8_t* data);
 
 #endif

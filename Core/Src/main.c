@@ -200,9 +200,8 @@ void write_quartet(unsigned long i) {
 int read_fifo_and_write_file() {
 	uint8_t temp=0, temp_last=0;
 	uint32_t length = 0;
-	static int i = 0;
-	static int k = 0;
-	unsigned long position = 0;
+	int i = 0;
+	FSIZE_t position = 0;
 	uint16_t frame_cnt = 0;
 	uint8_t remnant = 0;
 	char str[8];
@@ -238,8 +237,7 @@ int read_fifo_and_write_file() {
 	fr = f_write(&fil, buf, sizeof(uint8_t)*(AVIOFFSET), &bw);
 	if (fr) printf("%i\r\n", fr);
 	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
-	buf[0] = BURST_FIFO_READ;
-	HAL_SPI_Transmit(ov5462.hspi, buf, 1, 100); // send FIFO burst command
+	OV5462_request_FIFO_burst(&ov5462); // send FIFO burst command
 
 	i = 0;
 
@@ -247,7 +245,7 @@ int read_fifo_and_write_file() {
 		temp_last = temp;
 		SPI_OptimizedReadByte(&temp);
 
-		if ((temp == 0xD9) && (temp == 0xFF)) { // end of image
+		if ((temp == 0xD9) && (temp_last == 0xFF)) { // end of image
 			buf[i++] = temp;
 			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
 			fr = f_write(&fil, buf, sizeof(uint8_t)*i, &bw);
@@ -276,8 +274,7 @@ int read_fifo_and_write_file() {
 			is_header = 0;
 			frame_cnt++;
 			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
-			buf[0] = BURST_FIFO_READ;
-			HAL_SPI_Transmit(ov5462.hspi, buf, 1, 100); // send FIFO burst command
+			OV5462_request_FIFO_burst(&ov5462); // send FIFO burst command
 		}
 
 		if (is_header) {
@@ -290,8 +287,7 @@ int read_fifo_and_write_file() {
 				i = 0;
 				buf[i++] = temp;
 				HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
-				buf[0] = BURST_FIFO_READ;
-				HAL_SPI_Transmit(ov5462.hspi, buf, 1, 100); // send FIFO burst command
+				OV5462_request_FIFO_burst(&ov5462); // send FIFO burst command
 				jpeg_size += 256;
 			}
 		} else if ((temp == 0xD8) && (temp_last == 0xFF)) {
@@ -303,8 +299,7 @@ int read_fifo_and_write_file() {
 			i = 0;
 			jpeg_size = 0;
 			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
-			buf[0] = BURST_FIFO_READ;
-			HAL_SPI_Transmit(ov5462.hspi, buf, 1, 100); // send FIFO burst command
+			OV5462_request_FIFO_burst(&ov5462); // send FIFO burst command
 			buf[i++] = temp_last;
 			buf[i++] = temp;
 
@@ -390,13 +385,19 @@ int main(void)
 
 	FRESULT fr;
 
+	printf("program start!\r\n");
+
   	HAL_Delay(1000);
 
-  	if(testSD()) {
-  		printf("SD test FAIL! Aborting...\r\n");
-  		return 0;
-  	} else {
-  		printf("SD test PASS!\r\n");
+  	while (1) {
+		if(testSD()) {
+			printf("SD test FAIL! Retrying...\r\n");
+			f_mount(NULL, "/", 1);
+			HAL_Delay(10000);
+		} else {
+			printf("SD test PASS!\r\n");
+			break;
+		}
   	}
 
   	while (1) {
@@ -479,7 +480,7 @@ int main(void)
 	  if (fr) printf("%i\r\n", fr);
 	 }
 
-  	if(f_mount(NULL, "", 1) != FR_OK)
+  	if(f_mount(NULL, "/", 1) != FR_OK)
   		printf("Failed to unmount\r\n");
 
   /* USER CODE END 2 */
@@ -688,7 +689,7 @@ static void MX_SPI2_Init(void)
   hspi2.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi2.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi2.Init.NSS = SPI_NSS_SOFT;
-  hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;
+  hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_32;
   hspi2.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi2.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi2.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
