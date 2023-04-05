@@ -34,7 +34,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define CHUNK_SIZE 512
+#define CHUNK_SIZE 1024
 #define AVIOFFSET 240
 #define   rate     0x0a
 /* USER CODE END PD */
@@ -197,7 +197,7 @@ void write_quartet(unsigned long i) {
 	if (fr) printf("quart%i\r\n", fr);
 }
 
-int read_fifo_and_write_file() {
+int read_fifo_and_write_avi_file() {
 	uint8_t temp=0, temp_last=0;
 	uint32_t length = 0;
 	int i = 0;
@@ -249,7 +249,6 @@ int read_fifo_and_write_file() {
 			buf[i++] = temp;
 			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
 			fr = f_write(&fil, buf, sizeof(uint8_t)*i, &bw);
-			if (fr) return fr;
 			jpeg_size += i;
 			remnant =  (4 - (jpeg_size & 0x00000003)) & 0x00000003;
 			jpeg_size = jpeg_size + remnant;
@@ -260,17 +259,15 @@ int read_fifo_and_write_file() {
 
 			position = f_tell(&fil);
 			fr = f_lseek(&fil, position - 4 - jpeg_size);
-			if (fr) return fr;
 			write_quartet(jpeg_size);
 
 			position = f_tell(&fil);
 			fr = f_lseek(&fil, position + 6);
-			if (fr) return fr;
 			f_puts("AVI1", &fil);
 			position = f_tell(&fil);
 
 			fr = f_lseek(&fil, position + jpeg_size - 10);
-			if (fr) return fr;
+
 			is_header = 0;
 			frame_cnt++;
 			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
@@ -333,9 +330,86 @@ int read_fifo_and_write_file() {
 	is_header = 0;
 
 	return 0;
+}
 
+int read_fifo_and_write_jpeg_files() {
+	uint8_t temp=0, temp_last=0;
+	uint32_t length = 0;
+	int i = 0;
+	int frame_num = 0;
+	uint8_t buf[CHUNK_SIZE];
+	FRESULT fr;
 
+	length = OV5462_read_fifo_length(&ov5462);
+	printf("Buffer length: %u\r\n", length);
 
+	if (length >= MAX_FIFO_LENGTH) {
+		printf("Buffer too large\r\n");
+		return -1;
+	}
+
+	if (length == 0) {
+		printf("Buffer empty\r\n");
+		return -1;
+	}
+
+	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
+	OV5462_request_FIFO_burst(&ov5462); // send FIFO burst command
+
+	f_open(&fil, "VIDEO.DAT", FA_OPEN_ALWAYS | FA_READ | FA_WRITE);
+
+	i = 0;
+
+	while (length--) {
+		temp_last = temp;
+		SPI_OptimizedReadByte(&temp);
+
+		if ((temp == 0xD9) && (temp_last == 0xFF)) { // end of image
+			buf[i++] = temp;
+			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
+			f_write(&fil, buf, sizeof(uint8_t)*i, &bw);
+//			f_close(&fil);
+
+			is_header = 0;
+
+			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
+			OV5462_request_FIFO_burst(&ov5462); // send FIFO burst command
+		}
+
+		if (is_header) {
+			if (i < CHUNK_SIZE) {
+				buf[i++] = temp;
+			} else {
+				HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
+				f_write(&fil, buf, sizeof(uint8_t)*CHUNK_SIZE, &bw);
+				i = 0;
+				buf[i++] = temp;
+				HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
+				OV5462_request_FIFO_burst(&ov5462); // send FIFO burst command
+			}
+		} else if ((temp == 0xD8) && (temp_last == 0xFF)) { // start of new image
+			is_header = 1;
+			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
+//			++frame_num;
+//			int filename_len = snprintf(NULL, 0, "/%d.jpg", frame_num);
+//			char* filename = malloc(filename_len+1);
+//			snprintf(filename, filename_len+1, "/%d.jpg", frame_num);
+//			printf("%s\r\n", filename);
+//
+//			f_open(&fil, filename, FA_OPEN_ALWAYS | FA_READ | FA_WRITE);
+//			free(filename);
+			i = 0;
+			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
+			OV5462_request_FIFO_burst(&ov5462); // send FIFO burst command
+			buf[i++] = temp_last;
+			buf[i++] = temp;
+		}
+	}
+
+	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
+	is_header = 0;
+
+	return 0;
 }
 
 /* USER CODE END 0 */
@@ -469,7 +543,7 @@ int main(void)
 		  printf("Capture done\r\n");
 	  }
 
-	  int why = read_fifo_and_write_file();
+	  int why = read_fifo_and_write_jpeg_files();
 	  if (why) {
 		  printf("movie save failed (%i) \r\n", why);
 	  } else {
@@ -689,7 +763,7 @@ static void MX_SPI2_Init(void)
   hspi2.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi2.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi2.Init.NSS = SPI_NSS_SOFT;
-  hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_32;
+  hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8;
   hspi2.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi2.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi2.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
