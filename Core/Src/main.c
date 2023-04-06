@@ -34,7 +34,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define CHUNK_SIZE 1024
+#define CHUNK_SIZE 4096
 #define AVIOFFSET 240
 #define   rate     0x0a
 /* USER CODE END PD */
@@ -93,10 +93,10 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_SPI2_Init(void);
-static void MX_SPI3_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_SPI1_Init(void);
+static void MX_SPI3_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -360,7 +360,7 @@ int read_fifo_and_write_jpeg_files() {
 
 	unsigned long optimizedCamReads = 0;
 	unsigned long sdWrites = 0;
-	unsigned long long regularCamReads = 0;
+	unsigned long regularCamReads = 0;
 
 	uint32_t t1;
 	uint32_t t2;
@@ -446,7 +446,7 @@ int read_fifo_and_write_jpeg_files() {
 
 	printf("opt: %lu\r\n", optimizedCamReads);
 	printf("sd: %lu\r\n", sdWrites);
-	printf("reg: %llu\r\n", regularCamReads);
+	printf("reg: %lu\r\n", regularCamReads);
 
 	return 0;
 }
@@ -483,11 +483,11 @@ int main(void)
   MX_GPIO_Init();
   MX_I2C1_Init();
   MX_SPI2_Init();
-  MX_SPI3_Init();
   MX_USART2_UART_Init();
   MX_FATFS_Init();
   MX_ADC1_Init();
   MX_SPI1_Init();
+  MX_SPI3_Init();
   /* USER CODE BEGIN 2 */
   HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
   	uint8_t buf[1] = { 0x00 }; // dummy write
@@ -764,7 +764,7 @@ static void MX_SPI1_Init(void)
   hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi1.Init.NSS = SPI_NSS_SOFT;
-  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8;
   hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -836,11 +836,11 @@ static void MX_SPI3_Init(void)
   hspi3.Instance = SPI3;
   hspi3.Init.Mode = SPI_MODE_MASTER;
   hspi3.Init.Direction = SPI_DIRECTION_2LINES;
-  hspi3.Init.DataSize = SPI_DATASIZE_16BIT;
+  hspi3.Init.DataSize = SPI_DATASIZE_8BIT;
   hspi3.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi3.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi3.Init.NSS = SPI_NSS_SOFT;
-  hspi3.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;
+  hspi3.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
   hspi3.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi3.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi3.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -915,12 +915,19 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : SD_SPI2_CS_Pin CAM_SPI1_CS_Pin */
-  GPIO_InitStruct.Pin = SD_SPI2_CS_Pin|CAM_SPI1_CS_Pin;
+  /*Configure GPIO pin : SD_SPI2_CS_Pin */
+  GPIO_InitStruct.Pin = SD_SPI2_CS_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(SD_SPI2_CS_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : CAM_SPI1_CS_Pin */
+  GPIO_InitStruct.Pin = CAM_SPI1_CS_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+  HAL_GPIO_Init(CAM_SPI1_CS_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : DAC_SPI2_CS_Pin */
   GPIO_InitStruct.Pin = DAC_SPI2_CS_Pin;

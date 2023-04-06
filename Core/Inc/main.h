@@ -91,10 +91,6 @@ void Error_Handler(void);
 #define TMS_GPIO_Port GPIOA
 #define TCK_Pin GPIO_PIN_14
 #define TCK_GPIO_Port GPIOA
-#define DAC_SPI3_SCK_Pin GPIO_PIN_10
-#define DAC_SPI3_SCK_GPIO_Port GPIOC
-#define DAC_SPI3_MOSI_Pin GPIO_PIN_12
-#define DAC_SPI3_MOSI_GPIO_Port GPIOC
 #define SWO_Pin GPIO_PIN_3
 #define SWO_GPIO_Port GPIOB
 #define IMU_I2C1_SCL_Pin GPIO_PIN_6
