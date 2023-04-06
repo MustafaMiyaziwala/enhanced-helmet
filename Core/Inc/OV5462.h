@@ -51,6 +51,8 @@ extern const reg_value_pair CONFIGURE_JPEG_CAPTURE[];
 
 uint8_t OV5462_init(OV5462_t*);
 
+void OV5462_continuous_capture_init(OV5462_t*);
+
 uint8_t OV5462_write_i2c_reg(OV5462_t*, int addr, int data);
 uint8_t OV5462_write_i2c_regs(OV5462_t*, const reg_value_pair regs[]);
 uint8_t OV5462_read_i2c_reg(OV5462_t*, int addr);

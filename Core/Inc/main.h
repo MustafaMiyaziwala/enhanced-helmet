@@ -53,12 +53,15 @@ extern "C" {
 void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
+void trigger_capture();
+int read_fifo_and_write_data_file();
 
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
 #define B1_Pin GPIO_PIN_13
 #define B1_GPIO_Port GPIOC
+#define B1_EXTI_IRQn EXTI15_10_IRQn
 #define ULTRA_RIGHT_ADC_IN10_Pin GPIO_PIN_0
 #define ULTRA_RIGHT_ADC_IN10_GPIO_Port GPIOC
 #define SD_SPI2_CS_Pin GPIO_PIN_1

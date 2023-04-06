@@ -92,8 +92,23 @@ uint8_t OV5462_init(OV5462_t* ov5462) {
 	err |=OV5462_write_i2c_reg(ov5462, 0x4407, 0x04); // 04?
 
 	OV5462_write_spi_reg(ov5462, OV5462_ARDUCHIP_TIM, OV5462_VSYNC_LEVEL_MASK);
+	OV5462_write_spi_reg(ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK);
 
 	return err;
+}
+
+void OV5462_continuous_capture_init(OV5462_t* ov5462) {
+	uint8_t camera_version = OV5462_read_spi_reg(ov5462, 0x40);
+	uint8_t frames;
+
+	// set continuous capture (depends on version)
+	if (camera_version && 0x70) {
+		frames = 0xFF;
+	} else {
+		frames = 0x07;
+	}
+
+	OV5462_write_spi_reg(ov5462, ARDUCHIP_FRAMES, frames);
 }
 
 uint32_t OV5462_read_fifo_length(OV5462_t* ov5462) {

@@ -53,6 +53,8 @@ SPI_HandleTypeDef hspi1;
 SPI_HandleTypeDef hspi2;
 SPI_HandleTypeDef hspi3;
 
+TIM_HandleTypeDef htim2;
+
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
@@ -97,6 +99,7 @@ static void MX_USART2_UART_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_SPI3_Init(void);
+static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -173,179 +176,25 @@ int testSD() {
 	return 0;
 }
 
-void write_quartet(unsigned long i) {
-	FRESULT fr;
+int read_fifo_and_write_data_file() {
+//	while (!(OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER) & CAPTURE_DONE_MASK)) {}; // wait for buffer to fill before saving
+//	while (!(OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER) & CAPTURE_DONE_MASK)) {}; // wait for final frame
 
-	uint8_t buf[1];
-	buf[0] = i % 0x100;
-	fr = f_write(&fil, buf, sizeof(uint8_t), &bw);
-	if (fr) printf("quart %i\r\n", fr);
-	i = i >> 8;
+	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK); // clear flag
 
-	buf[0] = i % 0x100;
-	fr = f_write(&fil, buf, sizeof(uint8_t), &bw);
-	if (fr) printf("quart%i\r\n", fr);
-	i = i >> 8;
-
-	buf[0] = i % 0x100;
-	fr = f_write(&fil, buf, sizeof(uint8_t), &bw);
-	if (fr) printf("quart%i\r\n", fr);
-	i = i >> 8;
-
-	buf[0] = i % 0x100;
-	fr = f_write(&fil, buf, sizeof(uint8_t), &bw);
-	if (fr) printf("quart%i\r\n", fr);
-}
-
-int read_fifo_and_write_avi_file() {
 	uint8_t temp=0, temp_last=0;
 	uint32_t length = 0;
 	int i = 0;
-	FSIZE_t position = 0;
-	uint16_t frame_cnt = 0;
-	uint8_t remnant = 0;
-	char str[8];
-	uint8_t buf[256];
-	FRESULT fr;
-
-	length = OV5462_read_fifo_length(&ov5462);
-	printf("Buffer length: %u\r\n", length);
-
-	if (length >= MAX_FIFO_LENGTH) {
-		printf("Buffer too large\r\n");
-		return -1;
-	}
-
-	if (length == 0) {
-		printf("Buffer empty\r\n");
-		return -1;
-	}
-
-	movi_size = 0;
-
-
-	fr = f_open(&fil, "/COOL.AVI", FA_OPEN_ALWAYS | FA_READ | FA_WRITE);
-	if (fr) {
-		printf("couldn't open file (%i)", fr);
-		return -1;
-	}
-
-	for (i = 0; i < AVIOFFSET; ++i) {
-		buf[i] = avi_header[i];
-	}
-
-	fr = f_write(&fil, buf, sizeof(uint8_t)*(AVIOFFSET), &bw);
-	if (fr) printf("%i\r\n", fr);
-	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
-	OV5462_request_FIFO_burst(&ov5462); // send FIFO burst command
-
-	i = 0;
-
-	while (length--) {
-		temp_last = temp;
-		SPI_OptimizedReadByte(&temp);
-
-		if ((temp == 0xD9) && (temp_last == 0xFF)) { // end of image
-			buf[i++] = temp;
-			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
-			fr = f_write(&fil, buf, sizeof(uint8_t)*i, &bw);
-			jpeg_size += i;
-			remnant =  (4 - (jpeg_size & 0x00000003)) & 0x00000003;
-			jpeg_size = jpeg_size + remnant;
-			movi_size += jpeg_size;
-			if (remnant > 0) {
-				f_write(&fil, zero_buf, sizeof(uint8_t)*remnant, &bw);
-			}
-
-			position = f_tell(&fil);
-			fr = f_lseek(&fil, position - 4 - jpeg_size);
-			write_quartet(jpeg_size);
-
-			position = f_tell(&fil);
-			fr = f_lseek(&fil, position + 6);
-			f_puts("AVI1", &fil);
-			position = f_tell(&fil);
-
-			fr = f_lseek(&fil, position + jpeg_size - 10);
-
-			is_header = 0;
-			frame_cnt++;
-			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
-			OV5462_request_FIFO_burst(&ov5462); // send FIFO burst command
-		}
-
-		if (is_header) {
-			if (i < 256) {
-				buf[i++] = temp;
-			} else {
-				HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
-				fr = f_write(&fil, buf, sizeof(uint8_t)*256, &bw);
-				if (fr) return fr;
-				i = 0;
-				buf[i++] = temp;
-				HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
-				OV5462_request_FIFO_burst(&ov5462); // send FIFO burst command
-				jpeg_size += 256;
-			}
-		} else if ((temp == 0xD8) && (temp_last == 0xFF)) {
-			is_header = 1;
-			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
-			f_puts("00dc", &fil);
-			fr = f_write(&fil, zero_buf, sizeof(uint8_t)*4, &bw);
-			if (fr) return fr;
-			i = 0;
-			jpeg_size = 0;
-			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
-			OV5462_request_FIFO_burst(&ov5462); // send FIFO burst command
-			buf[i++] = temp_last;
-			buf[i++] = temp;
-
-		}
-	}
-
-	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
-	fr = f_lseek(&fil, 4);
-	if (fr) return fr;
-	write_quartet(movi_size + 12*frame_cnt+4);
-	unsigned long us_per_frame = 1000000 / rate;
-	fr = f_lseek(&fil, 0x20);
-	if (fr) return fr;
-	write_quartet(us_per_frame);
-	unsigned long max_bytes_per_sec = movi_size * rate/ frame_cnt;
-	fr = f_lseek(&fil, 0x24);
-	if (fr) return fr;
-	write_quartet(max_bytes_per_sec);
-	unsigned long tot_frames = frame_cnt;
-	fr = f_lseek(&fil, 0x30);
-	if (fr) return fr;
-	write_quartet(tot_frames);
-
-	unsigned long frames = frame_cnt;
-	fr = f_lseek(&fil, 0xe0);
-	if (fr) return fr;
-	write_quartet(frames);
-	fr = f_lseek(&fil, 0xe8);
-	if (fr) return fr;
-	write_quartet(movi_size);
-	is_header = 0;
-
-	return 0;
-}
-
-int read_fifo_and_write_jpeg_files() {
-	uint8_t temp=0, temp_last=0;
-	uint32_t length = 0;
-	int i = 0;
-	int frame_num = 0;
 	uint8_t buf[CHUNK_SIZE];
-	FRESULT fr;
+
+	static int video_id = 0;
 
 	length = OV5462_read_fifo_length(&ov5462);
-	printf("Buffer length: %u\r\n", length);
+	printf("Buffer length: %lu\r\n", length);
 
 	if (length >= MAX_FIFO_LENGTH) {
 		printf("Buffer too large\r\n");
-		return -1;
+		length = MAX_FIFO_LENGTH-1;
 	}
 
 	if (length == 0) {
@@ -353,48 +202,36 @@ int read_fifo_and_write_jpeg_files() {
 		return -1;
 	}
 
+	length = MAX_FIFO_LENGTH-1; // !! ASSUME BUFFER IS FULL !!
+
+	int filename_len = snprintf(NULL, 0, "%d.DAT", video_id);
+	char* filename = malloc(filename_len+1);
+	snprintf(filename, filename_len+1, "%d.DAT", video_id);
+
+	FRESULT fr = f_open(&fil, filename, FA_OPEN_ALWAYS | FA_READ | FA_WRITE);
+	printf("%s\r\n", filename);
+	free(filename);
+	if (fr) printf("file open failed\r\n");
+	++video_id;
+	i = 0;
+
 	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
 	OV5462_request_FIFO_burst(&ov5462); // send FIFO burst command
 
-	f_open(&fil, "VIDEO.DAT", FA_OPEN_ALWAYS | FA_READ | FA_WRITE);
-
-	unsigned long optimizedCamReads = 0;
-	unsigned long sdWrites = 0;
-	unsigned long regularCamReads = 0;
-
-	uint32_t t1;
-	uint32_t t2;
-
-	i = 0;
-
 	while (length--) {
 		temp_last = temp;
-
-		t1 = HAL_GetTick();
 		SPI_OptimizedReadByte(&temp);
-		t2 = HAL_GetTick();
-
-		optimizedCamReads += (t2 - t1);
 
 		if ((temp == 0xD9) && (temp_last == 0xFF)) { // end of image
 			buf[i++] = temp;
 			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
 
-			t1 = HAL_GetTick();
+//			printf("EOI\r\n");
 			f_write(&fil, buf, sizeof(uint8_t)*i, &bw);
-			t2 = HAL_GetTick();
-
-			sdWrites += (t2-t1);
-//			f_close(&fil);
-
 			is_header = 0;
 
 			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
-
-			t1 = HAL_GetTick();
 			OV5462_request_FIFO_burst(&ov5462); // send FIFO burst command
-			t2 = HAL_GetTick();
-			regularCamReads += (t2-t1);
 		}
 
 		if (is_header) {
@@ -403,38 +240,20 @@ int read_fifo_and_write_jpeg_files() {
 			} else {
 				HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
 
-				t1 = HAL_GetTick();
 				f_write(&fil, buf, sizeof(uint8_t)*CHUNK_SIZE, &bw);
-				t2 = HAL_GetTick();
-
-				sdWrites += (t2-t1);
 				i = 0;
 				buf[i++] = temp;
 				HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
 
-				t1 = HAL_GetTick();
 				OV5462_request_FIFO_burst(&ov5462); // send FIFO burst command
-				t2 = HAL_GetTick();
-				regularCamReads += (t2-t1);
 			}
 		} else if ((temp == 0xD8) && (temp_last == 0xFF)) { // start of new image
 			is_header = 1;
 			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
-//			++frame_num;
-//			int filename_len = snprintf(NULL, 0, "/%d.jpg", frame_num);
-//			char* filename = malloc(filename_len+1);
-//			snprintf(filename, filename_len+1, "/%d.jpg", frame_num);
-//			printf("%s\r\n", filename);
-//
-//			f_open(&fil, filename, FA_OPEN_ALWAYS | FA_READ | FA_WRITE);
-//			free(filename);
 			i = 0;
 			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
 
-			t1 = HAL_GetTick();
 			OV5462_request_FIFO_burst(&ov5462); // send FIFO burst command
-			t2 = HAL_GetTick();
-			regularCamReads += (t2-t1);
 
 			buf[i++] = temp_last;
 			buf[i++] = temp;
@@ -443,12 +262,18 @@ int read_fifo_and_write_jpeg_files() {
 
 	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
 	is_header = 0;
+	f_close(&fil);
+	printf("Save complete \r\n");
 
-	printf("opt: %lu\r\n", optimizedCamReads);
-	printf("sd: %lu\r\n", sdWrites);
-	printf("reg: %lu\r\n", regularCamReads);
+//	OV5462_continuous_capture_init(&ov5462); // restore continuous capture functionality
 
 	return 0;
+}
+
+void trigger_capture() {
+	printf("Capture!\r\n");
+	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK); // clear flag
+	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_START_MASK); // start capture
 }
 
 /* USER CODE END 0 */
@@ -488,15 +313,15 @@ int main(void)
   MX_ADC1_Init();
   MX_SPI1_Init();
   MX_SPI3_Init();
+  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
+  HAL_TIM_Base_Start_IT(&htim2);
   HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
   	uint8_t buf[1] = { 0x00 }; // dummy write
   	HAL_SPI_Transmit(&hspi1, buf, 1, 100);
 
   	ov5462.hi2c = &hi2c1;
 	ov5462.hspi = &hspi1;
-
-	FRESULT fr;
 
 	printf("program start!\r\n");
 
@@ -544,57 +369,12 @@ int main(void)
   		printf("Init fail!\r\n");
   	}
 
-  	// clear fifo
-  	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK);
+  	OV5462_continuous_capture_init(&ov5462);
 
-  	uint8_t camera_version = OV5462_read_spi_reg(&ov5462, 0x40);
-  	printf("Camera version: %u\r\n", camera_version);
-  	uint8_t frames;
+  	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK); // flush
+  	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK); // clear flag
+  	trigger_capture();
 
-  	// set continuous capture (depends on version)
-  	if (camera_version && 0x70) {
-  		frames = 0xFF;
-  	} else {
-  		frames = 0x07;
-  	}
-
-  	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FRAMES, frames);
-
-  	int is_capture_flag = 1;
-
-	if (is_capture_flag) {
-	  OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK); // flush
-	  OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK); // clear flag
-
-	  OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_START_MASK); // start capture
-
-	  while (!(OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER) & CAPTURE_DONE_MASK)) {};
-	  int length = (int) OV5462_read_fifo_length(&ov5462);
-
-	  if (length < 0x3FFFFF) {
-		  OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK); // flush
-		  OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK); // clear flag
-
-		  OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_START_MASK); // start capture
-		  while (!(OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER) & CAPTURE_DONE_MASK)) {};
-		  printf("Capture done\r\n");
-	  } else {
-		  printf("Capture done\r\n");
-	  }
-
-	  int why = read_fifo_and_write_jpeg_files();
-	  if (why) {
-		  printf("movie save failed (%i) \r\n", why);
-	  } else {
-		  printf("movie save success \r\n");
-	  }
-
-	  fr = f_close(&fil);
-	  if (fr) printf("%i\r\n", fr);
-	 }
-
-  	if(f_mount(NULL, "/", 1) != FR_OK)
-  		printf("Failed to unmount\r\n");
 
   /* USER CODE END 2 */
 
@@ -856,6 +636,51 @@ static void MX_SPI3_Init(void)
 }
 
 /**
+  * @brief TIM2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM2_Init(void)
+{
+
+  /* USER CODE BEGIN TIM2_Init 0 */
+
+  /* USER CODE END TIM2_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM2_Init 1 */
+
+  /* USER CODE END TIM2_Init 1 */
+  htim2.Instance = TIM2;
+  htim2.Init.Prescaler = 8399;
+  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim2.Init.Period = 300000;
+  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM2_Init 2 */
+
+  /* USER CODE END TIM2_Init 2 */
+
+}
+
+/**
   * @brief USART2 Initialization Function
   * @param None
   * @retval None
@@ -935,6 +760,10 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(DAC_SPI2_CS_GPIO_Port, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 1, 0);
+  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
 }
 
