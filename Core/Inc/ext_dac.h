@@ -11,6 +11,8 @@ typedef struct Ext_DAC_t {
 } Ext_DAC_t;
 
 
-static void shutdown_dac(Ext_DAC_t*);
+void shutdown_dac(Ext_DAC_t*);
+
+void write_to_dac(Ext_DAC_t*, uint16_t val);
 
 #endif

@@ -23,6 +23,16 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
+#include "ext_dac.h"
+#include "math.h"
+#include "wav.h"
+#include <string.h>
+#define LUT_SIZE 100
+uint16_t SIN_LUT[LUT_SIZE];
+const double AMP_PCENT = 70.0; //amplitude of sine wave (0- 100)
+
+#define AUDIO_BUF_LEN 1024
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -46,27 +56,152 @@ I2C_HandleTypeDef hi2c1;
 
 SPI_HandleTypeDef hspi2;
 SPI_HandleTypeDef hspi3;
+DMA_HandleTypeDef hdma_spi3_tx;
+
+TIM_HandleTypeDef htim4;
 
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
+
+FATFS fs;
+FATFS * pfs;
+FIL fil;
+FRESULT fres;
+DWORD fre_clust;
+uint32_t total_space, free_space;
+Ext_DAC_t ext_dac;
+uint8_t lut_idx = 0;
+
+static uint8_t file_buf[AUDIO_BUF_LEN];
+static uint16_t dac_buf[2][AUDIO_BUF_LEN];
+
+int32_t bytes_left = 0;
+uint8_t dac_bank = 0;
+uint16_t dac_buf_idx = 0;
+uint8_t dac_flag = 0;
+
+
 
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_SPI2_Init(void);
 static void MX_SPI3_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_ADC1_Init(void);
+static void MX_TIM4_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+int testSD() {
+/* Mount SD Card */
+	int ret = 0;
+	if(f_mount(&fs, "/", 0) != FR_OK) {
+		printf("Failed to mount SD Card\r\n");
+		return -1;
+	}
+
+	/* Open file to write */
+	ret = f_open(&fil, "/TEST.TXT", FA_OPEN_ALWAYS | FA_READ | FA_WRITE);
+	if(ret != FR_OK) {
+		printf("Failed to open file (%i) \r\n", ret);
+		return -1;
+	}
+
+	if(f_getfree("", &fre_clust, &pfs) != FR_OK) {
+		printf("Free space check failed\r\n");
+		return -1;
+	}
+
+	total_space = (uint32_t)((pfs->n_fatent - 2) * pfs->csize * 0.5);
+	free_space = (uint32_t)(fre_clust * pfs->csize * 0.5);
+
+	/* free space is less than 1kb */
+	if(free_space < 1) {
+		printf("Drive is full\r\n");
+		return -1;
+	}
+
+//	printf("SD CARD MOUNTED! TESTING R/W...\r\n");
+
+	f_puts("TEST", &fil);
+
+	/* Close file */
+	ret = f_close(&fil);
+	if(ret != FR_OK) {
+		printf("Failed to close file (%i) \r\n", ret);
+		return -1;
+	}
+
+	/* Open file to read */
+	ret = f_open(&fil, "/TEST.TXT", FA_READ);
+	if(ret != FR_OK) {
+		printf("Failed to open in read mode (%i) \r\n", ret);
+		return -1;
+	}
+
+	char buffer[5];
+	f_gets(buffer, sizeof(buffer), &fil);
+
+	if (strcmp(buffer, "TEST")) {
+		printf("File contents MISMATCH. FAIL R/W test\r\n");
+		return -1;
+	}
+
+//	printf("PASSED: read file contents\r\n");
+
+	/* Close file */
+	if(f_close(&fil) != FR_OK) {
+		printf("Failed to close\r\n");
+		return -1;
+	}
+
+	if(f_unlink("test.txt") != FR_OK) {
+		printf("Failed to delete test file \r\n");
+	}
+
+	return 0;
+}
+
+void fill_LUT(void)
+{
+	//creates a sine wave look up table centered at VREF/2
+	double HALF_AMP = (AMP_PCENT/ 100.0) * 127.0;//calculates a half amplitude given the desired volume
+	uint16_t i = 0;
+	for(; i < LUT_SIZE; ++i)
+	{
+		SIN_LUT[i] = (uint16_t) ( (sin( ( (double) i) * 360.0 / ((double) LUT_SIZE)  * 3.14159265/180.0) * HALF_AMP) + 128.0);
+	}
+}
+
+void convert_data(uint8_t dac_bank_in) {
+	for (uint16_t i = 0; i < AUDIO_BUF_LEN; ++i) {
+		dac_buf[dac_bank_in][i] = (uint16_t)((0b111 << 12) | (uint16_t)(file_buf[i]) << 4);
+	}
+}
+
+
+void populate_bank(uint8_t dac_bank_in) {
+	UINT bytes_read;
+	FRESULT res;
+
+	res = f_read(&fil, file_buf, AUDIO_BUF_LEN, &bytes_read);
+	bytes_left -= bytes_read;
+	if (res != FR_OK || bytes_read == 0)
+		return;
+
+	convert_data(dac_bank_in);
+	dac_flag |= (1 << dac_bank_in);
+
+}
 
 /* USER CODE END 0 */
 
@@ -98,13 +233,54 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_I2C1_Init();
   MX_SPI2_Init();
   MX_SPI3_Init();
   MX_USART2_UART_Init();
   MX_FATFS_Init();
   MX_ADC1_Init();
+  MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
+
+  ext_dac.hspi = &hspi3;
+  ext_dac.cs_port = GPIOB;
+  ext_dac.cs_pin = GPIO_PIN_2;
+  shutdown_dac(&ext_dac);
+
+  fill_LUT();
+  testSD();
+  UINT count;
+
+  if(f_mount(&fs, "/", 0) != FR_OK) {
+  		printf("Failed to mount SD Card\r\n");
+  }
+
+  	/* Open file to write */
+  f_open(&fil, "/song.wav", FA_OPEN_ALWAYS | FA_READ | FA_WRITE);
+
+
+  WAV_Header wav_header;
+  f_read(&fil, &wav_header, sizeof(WAV_Header), &count);
+
+  bytes_left = wav_header.file_size - 2048;
+  populate_bank(0);
+  populate_bank(1);
+  //write_to_dac(&ext_dac, 127);
+
+  HAL_TIM_Base_Start_IT(&htim4);
+  while (bytes_left > 0) {
+	  printf("%ld\n\r", bytes_left);
+	  if (!(dac_flag & 0b1)) {
+		  populate_bank(0);
+	  }
+	  if (!(dac_flag & 0b10)) {
+	  	 populate_bank(1);
+	  }
+  }
+  HAL_TIM_Base_Stop_IT(&htim4);
+  shutdown_dac(&ext_dac);
+
 
   /* USER CODE END 2 */
 
@@ -112,6 +288,9 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  //write_to_dac(&ext_dac, SIN_LUT[lut_idx++]);
+	  //lut_idx %= 100;
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -312,7 +491,7 @@ static void MX_SPI3_Init(void)
   hspi3.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi3.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi3.Init.NSS = SPI_NSS_SOFT;
-  hspi3.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;
+  hspi3.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_4;
   hspi3.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi3.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi3.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -324,6 +503,51 @@ static void MX_SPI3_Init(void)
   /* USER CODE BEGIN SPI3_Init 2 */
 
   /* USER CODE END SPI3_Init 2 */
+
+}
+
+/**
+  * @brief TIM4 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM4_Init(void)
+{
+
+  /* USER CODE BEGIN TIM4_Init 0 */
+
+  /* USER CODE END TIM4_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM4_Init 1 */
+
+  /* USER CODE END TIM4_Init 1 */
+  htim4.Instance = TIM4;
+  htim4.Init.Prescaler = 0;
+  htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim4.Init.Period = 7619;
+  htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+  if (HAL_TIM_Base_Init(&htim4) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim4, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim4, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM4_Init 2 */
+
+  /* USER CODE END TIM4_Init 2 */
 
 }
 
@@ -357,6 +581,22 @@ static void MX_USART2_UART_Init(void)
   /* USER CODE BEGIN USART2_Init 2 */
 
   /* USER CODE END USART2_Init 2 */
+
+}
+
+/**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA1_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA1_Stream5_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream5_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream5_IRQn);
 
 }
 
@@ -423,6 +663,22 @@ PUTCHAR_PROTOTYPE
 {
   HAL_UART_Transmit(&huart2, (uint8_t *)&ch, 1, 0xFFFF);
   return ch;
+}
+
+
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+	if (htim == &htim4) {
+		write_to_dac(&ext_dac, dac_buf[dac_bank][dac_buf_idx++]);
+		if (dac_buf_idx >= AUDIO_BUF_LEN) {
+			dac_flag &= ~(1 << dac_bank);
+			dac_bank = (dac_bank + 1) % 2;
+			dac_buf_idx = 0;
+		}
+		//write_to_dac(&ext_dac, SIN_LUT[lut_idx++]);
+		//lut_idx %= 100;
+		//HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_2);
+	}
 }
 /* USER CODE END 4 */
 
