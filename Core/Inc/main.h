@@ -71,8 +71,6 @@ void Error_Handler(void);
 #define DEBUG_USART_TX_GPIO_Port GPIOA
 #define DEBUG_USART_RX_Pin GPIO_PIN_3
 #define DEBUG_USART_RX_GPIO_Port GPIOA
-#define LD2_Pin GPIO_PIN_5
-#define LD2_GPIO_Port GPIOA
 #define ULTRA_LEFT_ADC_IN8_Pin GPIO_PIN_0
 #define ULTRA_LEFT_ADC_IN8_GPIO_Port GPIOB
 #define ULTRA_CENTER_ADC1_IN9_Pin GPIO_PIN_1
@@ -81,6 +79,9 @@ void Error_Handler(void);
 #define DAC_SPI2_CS_GPIO_Port GPIOB
 #define SD_SPI2_SCK_Pin GPIO_PIN_10
 #define SD_SPI2_SCK_GPIO_Port GPIOB
+#define IMU_IT1_Pin GPIO_PIN_8
+#define IMU_IT1_GPIO_Port GPIOA
+#define IMU_IT1_EXTI_IRQn EXTI9_5_IRQn
 #define TMS_Pin GPIO_PIN_13
 #define TMS_GPIO_Port GPIOA
 #define TCK_Pin GPIO_PIN_14
