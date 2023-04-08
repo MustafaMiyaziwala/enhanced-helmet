@@ -1,0 +1,17 @@
+main.c:617:13:MX_GPIO_Init	1
+main.c:599:13:MX_DMA_Init	1
+main.c:103:5:testSD	10
+main.c:173:6:fill_LUT	2
+main.c:184:6:convert_data	2
+main.c:191:6:populate_bank	3
+main.c:671:1:__io_putchar	1
+main.c:679:6:HAL_TIM_PeriodElapsedCallback	1
+main.c:700:6:Error_Handler	1
+main.c:413:13:MX_I2C1_Init	1
+main.c:447:13:MX_SPI2_Init	1
+main.c:485:13:MX_SPI3_Init	1
+main.c:568:13:MX_USART2_UART_Init	1
+main.c:361:13:MX_ADC1_Init	1
+main.c:523:13:MX_TIM4_Init	1
+main.c:314:6:SystemClock_Config	1
+main.c:211:5:main	2

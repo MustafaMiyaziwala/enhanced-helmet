@@ -1,3 +1,4 @@
+"./Core/Src/audio.o"
 "./Core/Src/ext_dac.o"
 "./Core/Src/fatfs_sd.o"
 "./Core/Src/main.o"

@@ -25,8 +25,8 @@
 #include <stdio.h>
 #include "ext_dac.h"
 #include "math.h"
-#include "wav.h"
 #include <string.h>
+#include "audio.h"
 #define LUT_SIZE 100
 uint16_t SIN_LUT[LUT_SIZE];
 const double AMP_PCENT = 70.0; //amplitude of sine wave (0- 100)
@@ -72,6 +72,7 @@ DWORD fre_clust;
 uint32_t total_space, free_space;
 Ext_DAC_t ext_dac;
 uint8_t lut_idx = 0;
+Audio audio;
 
 static uint8_t file_buf[AUDIO_BUF_LEN];
 static uint16_t dac_buf[2][AUDIO_BUF_LEN];
@@ -80,8 +81,6 @@ int32_t bytes_left = 0;
 uint8_t dac_bank = 0;
 uint16_t dac_buf_idx = 0;
 uint8_t dac_flag = 0;
-
-
 
 /* USER CODE END PV */
 
@@ -250,36 +249,45 @@ int main(void)
 
   fill_LUT();
   testSD();
-  UINT count;
+//  UINT count;
 
   if(f_mount(&fs, "/", 0) != FR_OK) {
   		printf("Failed to mount SD Card\r\n");
   }
 
+
   	/* Open file to write */
-  f_open(&fil, "/song.wav", FA_OPEN_ALWAYS | FA_READ | FA_WRITE);
+//  f_open(&fil, "/song.wav", FA_OPEN_ALWAYS | FA_READ | FA_WRITE);
+//
+//
+//  WAV_Header wav_header;
+//  f_read(&fil, &wav_header, sizeof(WAV_Header), &count);
+//
+//  bytes_left = wav_header.file_size - 2048;
+//  populate_bank(0);
+//  populate_bank(1);
+//  //write_to_dac(&ext_dac, 127);
+//
+//  HAL_TIM_Base_Start_IT(&htim4);
+//  while (bytes_left > 0) {
+//	  printf("%ld\n\r", bytes_left);
+//	  if (!(dac_flag & 0b1)) {
+//		  populate_bank(0);
+//	  }
+//	  if (!(dac_flag & 0b10)) {
+//	  	 populate_bank(1);
+//	  }
+//  }
+//  HAL_TIM_Base_Stop_IT(&htim4);
+//  shutdown_dac(&ext_dac);
 
 
-  WAV_Header wav_header;
-  f_read(&fil, &wav_header, sizeof(WAV_Header), &count);
+  audio.fs = &fs;
+  audio.fil = &fil;
+  audio.ext_dac = &ext_dac;
+  audio.htim = &htim4;
 
-  bytes_left = wav_header.file_size - 2048;
-  populate_bank(0);
-  populate_bank(1);
-  //write_to_dac(&ext_dac, 127);
-
-  HAL_TIM_Base_Start_IT(&htim4);
-  while (bytes_left > 0) {
-	  printf("%ld\n\r", bytes_left);
-	  if (!(dac_flag & 0b1)) {
-		  populate_bank(0);
-	  }
-	  if (!(dac_flag & 0b10)) {
-	  	 populate_bank(1);
-	  }
-  }
-  HAL_TIM_Base_Stop_IT(&htim4);
-  shutdown_dac(&ext_dac);
+  play_wav(&audio, "/song.wav");
 
 
   /* USER CODE END 2 */
@@ -289,7 +297,8 @@ int main(void)
   while (1)
   {
 	  //write_to_dac(&ext_dac, SIN_LUT[lut_idx++]);
-	  //lut_idx %= 100;
+	  //lut_idx %= 100;s
+	  check_and_fill_audio_buf(&audio);
 
     /* USER CODE END WHILE */
 
@@ -668,17 +677,19 @@ PUTCHAR_PROTOTYPE
 
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
-	if (htim == &htim4) {
-		write_to_dac(&ext_dac, dac_buf[dac_bank][dac_buf_idx++]);
-		if (dac_buf_idx >= AUDIO_BUF_LEN) {
-			dac_flag &= ~(1 << dac_bank);
-			dac_bank = (dac_bank + 1) % 2;
-			dac_buf_idx = 0;
-		}
-		//write_to_dac(&ext_dac, SIN_LUT[lut_idx++]);
-		//lut_idx %= 100;
-		//HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_2);
-	}
+//	if (htim == &htim4) {
+//		write_to_dac(&ext_dac, dac_buf[dac_bank][dac_buf_idx++]);
+//		if (dac_buf_idx >= AUDIO_BUF_LEN) {
+//			dac_flag &= ~(1 << dac_bank);
+//			dac_bank = (dac_bank + 1) % 2;
+//			dac_buf_idx = 0;
+//		}
+//		//write_to_dac(&ext_dac, SIN_LUT[lut_idx++]);
+//		//lut_idx %= 100;
+//		//HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_2);
+//	}
+
+	audio_callback(&audio, htim);
 }
 /* USER CODE END 4 */
 
