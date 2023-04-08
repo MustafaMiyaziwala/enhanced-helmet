@@ -65,6 +65,7 @@ FRESULT fres;
 DWORD fre_clust;
 uint32_t total_space, free_space;
 OV5462_t ov5462;
+int capture_flag = 0;
 
 int is_header = 0;
 uint bw;
@@ -181,6 +182,7 @@ int read_fifo_and_write_data_file() {
 //	while (!(OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER) & CAPTURE_DONE_MASK)) {}; // wait for final frame
 
 	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK); // clear flag
+	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK); // flush
 
 	uint8_t temp=0, temp_last=0;
 	uint32_t length = 0;
@@ -272,8 +274,14 @@ int read_fifo_and_write_data_file() {
 
 void trigger_capture() {
 	printf("Capture!\r\n");
+	capture_flag = 0;
 	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK); // clear flag
+	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK); // flush
 	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_START_MASK); // start capture
+}
+
+void set_capture_flag(int f) {
+	capture_flag = f;
 }
 
 /* USER CODE END 0 */
@@ -373,8 +381,8 @@ int main(void)
 
   	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK); // flush
   	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK); // clear flag
-  	trigger_capture();
 
+  	trigger_capture();
 
   /* USER CODE END 2 */
 
@@ -382,6 +390,9 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	 if (capture_flag && (OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER) & CAPTURE_DONE_MASK)) {
+		 trigger_capture();
+	 }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -656,7 +667,7 @@ static void MX_TIM2_Init(void)
   htim2.Instance = TIM2;
   htim2.Init.Prescaler = 8399;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 300000;
+  htim2.Init.Period = 610000;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
