@@ -20,6 +20,7 @@ static inline uint8_t fill_audio_buffer(Audio* audio, uint8_t buf_bank) {
 
 static inline void stop_audio(Audio* audio) {
 	HAL_TIM_Base_Stop_IT(audio->htim);
+	HAL_GPIO_WritePin(audio->amp_enable_port, audio->amp_enable_pin, GPIO_PIN_RESET);
 	shutdown_dac(audio->ext_dac);
 	f_close(audio->fil);
 	audio->dac_flag &= ~(1 << 2);
@@ -27,8 +28,10 @@ static inline void stop_audio(Audio* audio) {
 
 
 void play_wav(Audio* audio, const TCHAR* filename) {
-	HAL_TIM_Base_Stop_IT(audio->htim);
-	shutdown_dac(audio->ext_dac);
+
+	if (audio->dac_flag & (1 << 2)) {
+		stop_audio(audio);
+	}
 
 	UINT count;
 	f_open(audio->fil, filename, FA_OPEN_ALWAYS | FA_READ | FA_WRITE);
@@ -41,6 +44,8 @@ void play_wav(Audio* audio, const TCHAR* filename) {
 
 	audio->dac_flag |= (1 << 2);
 
+
+	HAL_GPIO_WritePin(audio->amp_enable_port, audio->amp_enable_pin, GPIO_PIN_SET);
 	HAL_TIM_Base_Start_IT(audio->htim);
 }
 

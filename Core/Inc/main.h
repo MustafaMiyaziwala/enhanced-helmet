@@ -73,6 +73,8 @@ void Error_Handler(void);
 #define DEBUG_USART_RX_GPIO_Port GPIOA
 #define LD2_Pin GPIO_PIN_5
 #define LD2_GPIO_Port GPIOA
+#define AMP_ENABLE_Pin GPIO_PIN_5
+#define AMP_ENABLE_GPIO_Port GPIOC
 #define ULTRA_LEFT_ADC_IN8_Pin GPIO_PIN_0
 #define ULTRA_LEFT_ADC_IN8_GPIO_Port GPIOB
 #define ULTRA_CENTER_ADC1_IN9_Pin GPIO_PIN_1

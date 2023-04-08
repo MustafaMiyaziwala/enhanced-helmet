@@ -286,8 +286,13 @@ int main(void)
   audio.fil = &fil;
   audio.ext_dac = &ext_dac;
   audio.htim = &htim4;
+  audio.amp_enable_port = GPIOC;
+  audio.amp_enable_pin = GPIO_PIN_5;
 
-  play_wav(&audio, "/song.wav");
+  play_wav(&audio, "/sine.wav");
+
+  uint32_t count = 5000000;
+  uint8_t started = 0;
 
 
   /* USER CODE END 2 */
@@ -296,6 +301,12 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  if (!count && !started) {
+		  play_wav(&audio, "/song.wav");
+		  started = 1;
+	  } else {
+		  --count;
+	  }
 	  //write_to_dac(&ext_dac, SIN_LUT[lut_idx++]);
 	  //lut_idx %= 100;s
 	  check_and_fill_audio_buf(&audio);
@@ -625,7 +636,7 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(SD_SPI2_CS_GPIO_Port, SD_SPI2_CS_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOC, SD_SPI2_CS_Pin|AMP_ENABLE_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
@@ -639,12 +650,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : SD_SPI2_CS_Pin */
-  GPIO_InitStruct.Pin = SD_SPI2_CS_Pin;
+  /*Configure GPIO pins : SD_SPI2_CS_Pin AMP_ENABLE_Pin */
+  GPIO_InitStruct.Pin = SD_SPI2_CS_Pin|AMP_ENABLE_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(SD_SPI2_CS_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pin : LD2_Pin */
   GPIO_InitStruct.Pin = LD2_Pin;

@@ -29,11 +29,14 @@ typedef struct Audio {
 	FIL* fil;
 	Ext_DAC_t* ext_dac;
 	TIM_HandleTypeDef* htim;
+	GPIO_TypeDef* amp_enable_port;
+
 
 	WAV_Header wav_header;
 	uint8_t dac_buf[2][AUDIO_BUF_LEN];
 	uint32_t bytes_left;
 	uint16_t dac_buf_idx;
+	uint16_t amp_enable_pin;
 	uint8_t dac_buf_bank;
 	uint8_t dac_flag;
 } Audio;
