@@ -67,6 +67,7 @@ uint32_t total_space, free_space;
 OV5462_t ov5462;
 int capture_flag = 0;
 int save_requested = 0;
+int check_capturing = 0;
 
 int is_header = 0;
 uint bw;
@@ -276,17 +277,12 @@ int read_fifo_and_write_data_file() {
 void trigger_capture() {
 	printf("Capture!\r\n");
 	capture_flag = 0;
-	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK | FIFO_RESET_WRITE | FIFO_RESET_READ); // clear flag
+	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK); // clear flag
+	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_RESET_WRITE);
+	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_RESET_READ);
 	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_START_MASK); // start capture
 
-	while (!(OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER) & CAPTURE_DONE_MASK)) {};
-	uint32_t length = OV5462_read_fifo_length(&ov5462);
-	printf("Buffer length: %lu\r\n", length);
-
-	if (length < 0x3FFFFF) {
-		OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK);
-		OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_START_MASK);
-	}
+	check_capturing = 1;
 }
 
 void set_capture_flag(int f) {
@@ -407,6 +403,17 @@ int main(void)
 			 trigger_capture();
 		 }
 
+	 }
+
+	 if (check_capturing && TIM2->CNT < 10000) {
+		 if (OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER) & CAPTURE_DONE_MASK) {
+			 uint32_t length = OV5462_read_fifo_length(&ov5462);
+			 printf("Premature capture completion! %lu bytes \r\n", length);
+
+			OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK);
+			OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_START_MASK);
+			check_capturing = 0;
+		 }
 	 }
     /* USER CODE END WHILE */
 
