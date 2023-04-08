@@ -66,6 +66,7 @@ DWORD fre_clust;
 uint32_t total_space, free_space;
 OV5462_t ov5462;
 int capture_flag = 0;
+int save_requested = 0;
 
 int is_header = 0;
 uint bw;
@@ -181,8 +182,7 @@ int read_fifo_and_write_data_file() {
 //	while (!(OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER) & CAPTURE_DONE_MASK)) {}; // wait for buffer to fill before saving
 //	while (!(OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER) & CAPTURE_DONE_MASK)) {}; // wait for final frame
 
-	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK); // clear flag
-	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK); // flush
+	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_RESET_READ); // clear flag
 
 	uint8_t temp=0, temp_last=0;
 	uint32_t length = 0;
@@ -266,6 +266,7 @@ int read_fifo_and_write_data_file() {
 	is_header = 0;
 	f_close(&fil);
 	printf("Save complete \r\n");
+	save_requested = 0;
 
 //	OV5462_continuous_capture_init(&ov5462); // restore continuous capture functionality
 
@@ -275,13 +276,25 @@ int read_fifo_and_write_data_file() {
 void trigger_capture() {
 	printf("Capture!\r\n");
 	capture_flag = 0;
-	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK); // clear flag
-	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK); // flush
+	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK | FIFO_RESET_WRITE | FIFO_RESET_READ); // clear flag
 	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_START_MASK); // start capture
+
+	while (!(OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER) & CAPTURE_DONE_MASK)) {};
+	uint32_t length = OV5462_read_fifo_length(&ov5462);
+	printf("Buffer length: %lu\r\n", length);
+
+	if (length < 0x3FFFFF) {
+		OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK);
+		OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_START_MASK);
+	}
 }
 
 void set_capture_flag(int f) {
 	capture_flag = f;
+}
+
+void set_save_requested(int f) {
+	save_requested = f;
 }
 
 /* USER CODE END 0 */
@@ -379,9 +392,6 @@ int main(void)
 
   	OV5462_continuous_capture_init(&ov5462);
 
-  	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK); // flush
-  	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK); // clear flag
-
   	trigger_capture();
 
   /* USER CODE END 2 */
@@ -391,7 +401,12 @@ int main(void)
   while (1)
   {
 	 if (capture_flag && (OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER) & CAPTURE_DONE_MASK)) {
-		 trigger_capture();
+		 if (save_requested) {
+			 read_fifo_and_write_data_file();
+		 } else {
+			 trigger_capture();
+		 }
+
 	 }
     /* USER CODE END WHILE */
 
