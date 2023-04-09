@@ -1,11 +1,12 @@
 #include "headlamp.h"
 #include <stdio.h>
+#include "main.h"
 
 int headlamp_on = 0;
 
 void toggle_headlamp() {
 	if (HAL_TIM_Base_GetState(HEADLAMP_TIMER) == HAL_TIM_STATE_READY) {
-		HAL_GPIO_WritePin(HEADLAMP_GPIO_BANK, HEADLAMP_GPIO_PIN,
+		HAL_GPIO_WritePin(HEADLAMP_OUT_GPIO_Port, HEADLAMP_OUT_Pin,
 				GPIO_PIN_RESET);
 		if (headlamp_on) {
 			__HAL_TIM_SET_AUTORELOAD(HEADLAMP_TIMER, 10000);
@@ -22,7 +23,7 @@ void toggle_headlamp() {
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 	if (htim == HEADLAMP_TIMER) {
-		HAL_GPIO_WritePin(HEADLAMP_GPIO_BANK, HEADLAMP_GPIO_PIN, GPIO_PIN_SET);
+		HAL_GPIO_WritePin(HEADLAMP_OUT_GPIO_Port, HEADLAMP_OUT_Pin, GPIO_PIN_SET);
 		HAL_TIM_Base_Stop_IT(HEADLAMP_TIMER);
 	}
 }

@@ -67,6 +67,8 @@ void Error_Handler(void);
 #define SD_SPI2_MISO_GPIO_Port GPIOC
 #define SD_SPI2_MOSI_Pin GPIO_PIN_3
 #define SD_SPI2_MOSI_GPIO_Port GPIOC
+#define HEADLAMP_OUT_Pin GPIO_PIN_0
+#define HEADLAMP_OUT_GPIO_Port GPIOA
 #define DEBUG_USART_TX_Pin GPIO_PIN_2
 #define DEBUG_USART_TX_GPIO_Port GPIOA
 #define DEBUG_USART_RX_Pin GPIO_PIN_3

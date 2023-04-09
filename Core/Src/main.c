@@ -125,7 +125,7 @@ int main(void) {
 	/* USER CODE BEGIN WHILE */
 	while (1) {
 		/* USER CODE END WHILE */
-
+		poll_button();
 		/* USER CODE BEGIN 3 */
 	}
 	/* USER CODE END 3 */
@@ -454,7 +454,7 @@ static void MX_GPIO_Init(void) {
 	HAL_GPIO_WritePin(SD_SPI2_CS_GPIO_Port, SD_SPI2_CS_Pin, GPIO_PIN_RESET);
 
 	/*Configure GPIO pin Output Level */
-	HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(GPIOA, HEADLAMP_OUT_Pin | LD2_Pin, GPIO_PIN_RESET);
 
 	/*Configure GPIO pin Output Level */
 	HAL_GPIO_WritePin(DAC_SPI2_CS_GPIO_Port, DAC_SPI2_CS_Pin, GPIO_PIN_RESET);
@@ -471,6 +471,13 @@ static void MX_GPIO_Init(void) {
 	GPIO_InitStruct.Pull = GPIO_NOPULL;
 	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
 	HAL_GPIO_Init(SD_SPI2_CS_GPIO_Port, &GPIO_InitStruct);
+
+	/*Configure GPIO pin : HEADLAMP_OUT_Pin */
+	GPIO_InitStruct.Pin = HEADLAMP_OUT_Pin;
+	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
+	GPIO_InitStruct.Pull = GPIO_NOPULL;
+	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+	HAL_GPIO_Init(HEADLAMP_OUT_GPIO_Port, &GPIO_InitStruct);
 
 	/*Configure GPIO pin : LD2_Pin */
 	GPIO_InitStruct.Pin = LD2_Pin;
