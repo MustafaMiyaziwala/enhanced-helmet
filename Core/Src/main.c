@@ -191,7 +191,7 @@ void trigger_capture() {
 	TIM2->CNT = 0;
 }
 
-int __attribute__((optimize("O0"))) read_fifo_and_write_data_file() {
+int read_fifo_and_write_data_file() {
 //	while (!(OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER) & CAPTURE_DONE_MASK)) {}; // wait for buffer to fill before saving
 //	while (!(OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER) & CAPTURE_DONE_MASK)) {}; // wait for final frame
 	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_RESET_READ);
@@ -240,8 +240,7 @@ int __attribute__((optimize("O0"))) read_fifo_and_write_data_file() {
 		} else {
 			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
 
-			fr = f_write(&fil, buf, sizeof(uint8_t)*CHUNK_SIZE, &bw);
-			if (fr) printf("%d\r\n", fr);
+			f_write(&fil, buf, sizeof(uint8_t)*CHUNK_SIZE, &bw);
 
 			i = 0;
 			buf[i++] = temp;
@@ -250,48 +249,6 @@ int __attribute__((optimize("O0"))) read_fifo_and_write_data_file() {
 			OV5462_request_FIFO_burst(&ov5462); // send FIFO burst command
 		}
 	}
-
-//	while (length--) {
-//		temp_last = temp;
-//		SPI_OptimizedReadByte(&temp);
-//
-//		if ((temp == 0xD9) && (temp_last == 0xFF)) { // end of image
-//			buf[i++] = temp;
-//			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
-//
-////			printf("EOI\r\n");
-//			f_write(&fil, buf, sizeof(uint8_t)*i, &bw);
-//			is_header = 0;
-//
-//			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
-//			OV5462_request_FIFO_burst(&ov5462); // send FIFO burst command
-//		}
-//
-//		if (is_header) {
-//			if (i < CHUNK_SIZE) {
-//				buf[i++] = temp;
-//			} else {
-//				HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
-//
-//				f_write(&fil, buf, sizeof(uint8_t)*CHUNK_SIZE, &bw);
-//				i = 0;
-//				buf[i++] = temp;
-//				HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
-//
-//				OV5462_request_FIFO_burst(&ov5462); // send FIFO burst command
-//			}
-//		} else if ((temp == 0xD8) && (temp_last == 0xFF)) { // start of new image
-//			is_header = 1;
-//			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
-//			i = 0;
-//			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
-//
-//			OV5462_request_FIFO_burst(&ov5462); // send FIFO burst command
-//
-//			buf[i++] = temp_last;
-//			buf[i++] = temp;
-//		}
-//	}
 
 	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
 	is_header = 0;
