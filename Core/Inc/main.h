@@ -59,8 +59,8 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define B1_Pin GPIO_PIN_13
 #define B1_GPIO_Port GPIOC
-#define ULTRA_RIGHT_ADC_IN10_Pin GPIO_PIN_0
-#define ULTRA_RIGHT_ADC_IN10_GPIO_Port GPIOC
+#define ULTRA_RIGHT_ADC1_IN10_Pin GPIO_PIN_0
+#define ULTRA_RIGHT_ADC1_IN10_GPIO_Port GPIOC
 #define SD_SPI2_CS_Pin GPIO_PIN_1
 #define SD_SPI2_CS_GPIO_Port GPIOC
 #define SD_SPI2_MISO_Pin GPIO_PIN_2
@@ -73,8 +73,8 @@ void Error_Handler(void);
 #define DEBUG_USART_RX_GPIO_Port GPIOA
 #define LD2_Pin GPIO_PIN_5
 #define LD2_GPIO_Port GPIOA
-#define ULTRA_LEFT_ADC_IN8_Pin GPIO_PIN_0
-#define ULTRA_LEFT_ADC_IN8_GPIO_Port GPIOB
+#define ULTRA_LEFT_ADC1_IN8_Pin GPIO_PIN_0
+#define ULTRA_LEFT_ADC1_IN8_GPIO_Port GPIOB
 #define ULTRA_CENTER_ADC1_IN9_Pin GPIO_PIN_1
 #define ULTRA_CENTER_ADC1_IN9_GPIO_Port GPIOB
 #define DAC_SPI2_CS_Pin GPIO_PIN_2

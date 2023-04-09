@@ -64,8 +64,8 @@ all: main-build
 main-build: enhanced-helmet.elf secondary-outputs
 
 # Tool invocations
-enhanced-helmet.elf enhanced-helmet.map: $(OBJS) $(USER_OBJS) N:\eecs373\enhanced-helmet\STM32F401RETX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "enhanced-helmet.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"N:\eecs373\enhanced-helmet\STM32F401RETX_FLASH.ld" --specs=nosys.specs -Wl,-Map="enhanced-helmet.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -u _printf_float -Wl,--start-group -lc -lm -Wl,--end-group
+enhanced-helmet.elf enhanced-helmet.map: $(OBJS) $(USER_OBJS) /Users/jmaff/Documents/School/2022-23/Winter\ Term/EECS\ 373/Project/enhanced-helmet/STM32F401RETX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "enhanced-helmet.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"/Users/jmaff/Documents/School/2022-23/Winter Term/EECS 373/Project/enhanced-helmet/STM32F401RETX_FLASH.ld" --specs=nosys.specs -Wl,-Map="enhanced-helmet.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -u _printf_float -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 
