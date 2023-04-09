@@ -19,8 +19,8 @@
 #define ARDUCHIP_FIFO 0x04
 #define FIFO_CLEAR_MASK 0x01
 #define FIFO_START_MASK 0x02
-#define FIFO_RESET_WRITE 0x10
-#define FIFO_RESET_READ 0x20
+#define FIFO_RESET_READ 0x10
+#define FIFO_RESET_WRITE 0x20
 
 #define ARDUCHIP_FRAMES 0x01
 
@@ -63,6 +63,6 @@ uint8_t OV5462_read_spi_reg(OV5462_t* ov5462, uint8_t addr);
 void OV5462_clear_fifo(OV5462_t*);
 uint32_t OV5462_read_fifo_length(OV5462_t*);
 void OV5462_request_FIFO_burst(OV5462_t*);
-void SPI_OptimizedReadByte(uint8_t* data);
+uint8_t SPI_OptimizedReadByte();
 
 #endif

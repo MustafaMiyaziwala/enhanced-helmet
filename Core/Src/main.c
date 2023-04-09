@@ -179,13 +179,25 @@ int testSD() {
 	return 0;
 }
 
-int read_fifo_and_write_data_file() {
+void trigger_capture() {
+	printf("Capture!\r\n");
+	capture_flag = 0;
+	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK); // clear flag
+	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_RESET_WRITE);
+	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_RESET_READ);
+	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_START_MASK); // start capture
+
+	check_capturing = 1;
+	TIM2->CNT = 0;
+}
+
+int __attribute__((optimize("O0"))) read_fifo_and_write_data_file() {
 //	while (!(OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER) & CAPTURE_DONE_MASK)) {}; // wait for buffer to fill before saving
 //	while (!(OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER) & CAPTURE_DONE_MASK)) {}; // wait for final frame
+	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_RESET_READ);
+	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK); // clear flag
 
-	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_RESET_READ); // clear flag
-
-	uint8_t temp=0, temp_last=0;
+	uint8_t temp=0;
 	uint32_t length = 0;
 	int i = 0;
 	uint8_t buf[CHUNK_SIZE];
@@ -205,7 +217,7 @@ int read_fifo_and_write_data_file() {
 		return -1;
 	}
 
-	length = MAX_FIFO_LENGTH-1; // !! ASSUME BUFFER IS FULL !!
+//	length = MAX_FIFO_LENGTH-1; // !! ASSUME BUFFER IS FULL !!
 
 	int filename_len = snprintf(NULL, 0, "%d.DAT", video_id);
 	char* filename = malloc(filename_len+1);
@@ -222,46 +234,64 @@ int read_fifo_and_write_data_file() {
 	OV5462_request_FIFO_burst(&ov5462); // send FIFO burst command
 
 	while (length--) {
-		temp_last = temp;
-		SPI_OptimizedReadByte(&temp);
-
-		if ((temp == 0xD9) && (temp_last == 0xFF)) { // end of image
+		temp = SPI_OptimizedReadByte();
+		if (i < CHUNK_SIZE) {
 			buf[i++] = temp;
+		} else {
 			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
 
-//			printf("EOI\r\n");
-			f_write(&fil, buf, sizeof(uint8_t)*i, &bw);
-			is_header = 0;
+			fr = f_write(&fil, buf, sizeof(uint8_t)*CHUNK_SIZE, &bw);
+			if (fr) printf("%d\r\n", fr);
 
-			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
-			OV5462_request_FIFO_burst(&ov5462); // send FIFO burst command
-		}
-
-		if (is_header) {
-			if (i < CHUNK_SIZE) {
-				buf[i++] = temp;
-			} else {
-				HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
-
-				f_write(&fil, buf, sizeof(uint8_t)*CHUNK_SIZE, &bw);
-				i = 0;
-				buf[i++] = temp;
-				HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
-
-				OV5462_request_FIFO_burst(&ov5462); // send FIFO burst command
-			}
-		} else if ((temp == 0xD8) && (temp_last == 0xFF)) { // start of new image
-			is_header = 1;
-			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
 			i = 0;
+			buf[i++] = temp;
 			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
 
 			OV5462_request_FIFO_burst(&ov5462); // send FIFO burst command
-
-			buf[i++] = temp_last;
-			buf[i++] = temp;
 		}
 	}
+
+//	while (length--) {
+//		temp_last = temp;
+//		SPI_OptimizedReadByte(&temp);
+//
+//		if ((temp == 0xD9) && (temp_last == 0xFF)) { // end of image
+//			buf[i++] = temp;
+//			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
+//
+////			printf("EOI\r\n");
+//			f_write(&fil, buf, sizeof(uint8_t)*i, &bw);
+//			is_header = 0;
+//
+//			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
+//			OV5462_request_FIFO_burst(&ov5462); // send FIFO burst command
+//		}
+//
+//		if (is_header) {
+//			if (i < CHUNK_SIZE) {
+//				buf[i++] = temp;
+//			} else {
+//				HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
+//
+//				f_write(&fil, buf, sizeof(uint8_t)*CHUNK_SIZE, &bw);
+//				i = 0;
+//				buf[i++] = temp;
+//				HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
+//
+//				OV5462_request_FIFO_burst(&ov5462); // send FIFO burst command
+//			}
+//		} else if ((temp == 0xD8) && (temp_last == 0xFF)) { // start of new image
+//			is_header = 1;
+//			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
+//			i = 0;
+//			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
+//
+//			OV5462_request_FIFO_burst(&ov5462); // send FIFO burst command
+//
+//			buf[i++] = temp_last;
+//			buf[i++] = temp;
+//		}
+//	}
 
 	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
 	is_header = 0;
@@ -269,20 +299,11 @@ int read_fifo_and_write_data_file() {
 	printf("Save complete \r\n");
 	save_requested = 0;
 
+	trigger_capture();
+
 //	OV5462_continuous_capture_init(&ov5462); // restore continuous capture functionality
 
 	return 0;
-}
-
-void trigger_capture() {
-	printf("Capture!\r\n");
-	capture_flag = 0;
-	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK); // clear flag
-	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_RESET_WRITE);
-	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_RESET_READ);
-	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_START_MASK); // start capture
-
-	check_capturing = 1;
 }
 
 void set_capture_flag(int f) {
@@ -389,6 +410,8 @@ int main(void)
   	OV5462_continuous_capture_init(&ov5462);
 
   	trigger_capture();
+  	check_capturing = 1;
+
 
   /* USER CODE END 2 */
 
@@ -402,17 +425,26 @@ int main(void)
 		 } else {
 			 trigger_capture();
 		 }
-
 	 }
 
-	 if (check_capturing && TIM2->CNT < 10000) {
-		 if (OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER) & CAPTURE_DONE_MASK) {
-			 uint32_t length = OV5462_read_fifo_length(&ov5462);
-			 printf("Premature capture completion! %lu bytes \r\n", length);
+	 if (check_capturing) {
+		 if (TIM2->CNT < 10000) {
+			 if (OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER) & CAPTURE_DONE_MASK) {
+				 uint32_t length = OV5462_read_fifo_length(&ov5462);
 
-			OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK);
-			OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_START_MASK);
-			check_capturing = 0;
+				 if (length < 0x3FFFFF) {
+					 printf("Premature capture completion! %lu bytes \r\n", length);
+
+					OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK);
+					OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_START_MASK);
+					check_capturing = 0;
+				 } else {
+					 OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK);
+					 OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_START_MASK);
+				 }
+			 }
+		 } else {
+			 check_capturing = 0; // it's been over a second, the capture probably started successfully
 		 }
 	 }
     /* USER CODE END WHILE */

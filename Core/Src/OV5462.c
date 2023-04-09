@@ -125,9 +125,9 @@ void OV5462_request_FIFO_burst(OV5462_t* ov5462) {
 	HAL_SPI_Transmit(ov5462->hspi, buf, 1, 100);
 }
 
-void SPI_OptimizedReadByte(uint8_t* data) {
+uint8_t SPI_OptimizedReadByte(uint8_t* data) {
 	while (((SPI1->SR)&(1>>7))) {}; // wait for BSY bit to reset
 	SPI1->DR = 0; // dummy byte
 	while (!((SPI1->SR) & (1<<0))) {};
-	*data = SPI1->DR;
+	return SPI1->DR;
 }

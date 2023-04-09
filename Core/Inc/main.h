@@ -53,7 +53,8 @@ extern "C" {
 void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
-void set_capture_flag();
+void set_capture_flag(int f);
+void set_save_requested(int f);
 int read_fifo_and_write_data_file();
 
 /* USER CODE END EFP */
