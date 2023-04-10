@@ -7,7 +7,7 @@ typedef enum {
 	PrintMessage, ToggleHeadlamp, Placeholder
 } XBee_Command;
 
-typedef volatile struct {
+typedef struct {
 	XBee_Command command;
 	uint32_t target;
 	uint8_t data[100];
@@ -21,5 +21,7 @@ void XBee_Init();
 extern UART_HandleTypeDef huart1;
 
 #define XBEE_UART &huart1
+
+#define MIN_TRANSMIT_PERIOD 100
 
 #endif

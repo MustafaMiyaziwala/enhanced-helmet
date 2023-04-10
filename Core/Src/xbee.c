@@ -4,9 +4,14 @@
 
 uint32_t UID;
 XBee_Data XBee_Received;
+uint32_t last_transmit;
 
 void XBee_Transmit(XBee_Data *data) {
-	HAL_UART_Transmit_DMA(XBEE_UART, (uint8_t*) data, sizeof(XBee_Data));
+	uint32_t time = HAL_GetTick();
+	if (time < last_transmit || time - last_transmit > MIN_TRANSMIT_PERIOD) {
+		HAL_UART_Transmit_DMA(XBEE_UART, (uint8_t*) data, sizeof(XBee_Data));
+		last_transmit = time;
+	}
 }
 
 void XBee_Receive(XBee_Data *data) {
@@ -17,7 +22,7 @@ void XBee_Resolve() {
 	if (XBee_Received.target == 0 || XBee_Received.target == UID) {
 		switch (XBee_Received.command) {
 		case PrintMessage:
-			printf("Message\n");
+			printf("%s\n", (char *) XBee_Received.data);
 			break;
 		case ToggleHeadlamp:
 			toggle_headlamp();
@@ -37,16 +42,24 @@ void XBee_Init() {
 	XBee_Receive(&XBee_Received);
 }
 
-void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
-	printf("Transmitted\n");
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
+	if (huart == XBEE_UART) {
+		printf("XBee Error\n");
+	}
 }
+
+//void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
+//	if (huart == XBEE_UART) {
+//		printf("Transmitted data\n");
+//	}
+//}
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 	if (huart == XBEE_UART) {
-		printf("Received - Type: %i, Target: %u, Data: [%u, %u, %u, ...]\n",
-				XBee_Received.command, (unsigned int) XBee_Received.target,
-				XBee_Received.data[0], XBee_Received.data[1],
-				XBee_Received.data[2]);
+//		printf("Received - Type: %i, Target: %u, Data: [%u, %u, %u, ...]\n",
+//				XBee_Received.command, (unsigned int) XBee_Received.target,
+//				XBee_Received.data[0], XBee_Received.data[1],
+//				XBee_Received.data[2]);
 		XBee_Resolve();
 	}
 }

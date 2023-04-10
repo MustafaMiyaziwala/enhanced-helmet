@@ -8,4 +8,5 @@ void toggle_headlamp();
 extern TIM_HandleTypeDef htim10;
 
 #define HEADLAMP_TIMER &htim10
+
 #endif

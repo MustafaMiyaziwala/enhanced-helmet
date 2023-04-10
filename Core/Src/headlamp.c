@@ -27,3 +27,4 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 		HAL_TIM_Base_Stop_IT(HEADLAMP_TIMER);
 	}
 }
+

@@ -83,6 +83,9 @@ void Error_Handler(void);
 #define DAC_SPI2_CS_GPIO_Port GPIOB
 #define SD_SPI2_SCK_Pin GPIO_PIN_10
 #define SD_SPI2_SCK_GPIO_Port GPIOB
+#define INPUT_INT1_Pin GPIO_PIN_8
+#define INPUT_INT1_GPIO_Port GPIOC
+#define INPUT_INT1_EXTI_IRQn EXTI9_5_IRQn
 #define XBEE_USART_TX_Pin GPIO_PIN_9
 #define XBEE_USART_TX_GPIO_Port GPIOA
 #define XBEE_USART_RX_Pin GPIO_PIN_10
@@ -97,10 +100,10 @@ void Error_Handler(void);
 #define DAC_SPI3_MOSI_GPIO_Port GPIOC
 #define SWO_Pin GPIO_PIN_3
 #define SWO_GPIO_Port GPIOB
-#define IMU_I2C1_SCL_Pin GPIO_PIN_6
-#define IMU_I2C1_SCL_GPIO_Port GPIOB
-#define IMU_I2C1_SDA_Pin GPIO_PIN_7
-#define IMU_I2C1_SDA_GPIO_Port GPIOB
+#define I2C1_SCL_Pin GPIO_PIN_6
+#define I2C1_SCL_GPIO_Port GPIOB
+#define I2C1_SDA_Pin GPIO_PIN_7
+#define I2C1_SDA_GPIO_Port GPIOB
 /* USER CODE BEGIN Private defines */
 
 /* USER CODE END Private defines */
