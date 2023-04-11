@@ -3,24 +3,30 @@
 #include "headlamp.h"
 #include <stdio.h>
 #include <string.h>
+#include "ff.h"
+
+extern FATFS fs;
+extern uint32_t UID;
 
 uint8_t status[8];
+int input_connected = 1;
+
+extern XBee_Data XBee_Send;
 
 void Input_Touched(int button) {
-	XBee_Data data;
+	char buffer[50];
 	switch (button) {
 	case 0:
-		printf("Transmitting Message\n");
-		data.command = PrintMessage;
-		data.target = 0;
-		strcpy((char *) data.data, "Hello World!");
-		XBee_Transmit(&data);
+		printf("Sending message\n");
+		XBee_Send.command = PrintMessage;
+		XBee_Send.target = 0;
+		sprintf(buffer, "Hello from device %u", (unsigned int) UID);
+		strcpy((char *) XBee_Send.data, buffer);
+		XBee_Transmit(&XBee_Send);
 		break;
 	case 1:
-		printf("Toggling Headlamps\n");
-		data.command = ToggleHeadlamp;
-		data.target = 0;
-		XBee_Transmit(&data);
+		printf("Toggling headlamp\n");
+		toggle_headlamp();
 		break;
 	default:
 		printf("Button not configured\n");
@@ -39,7 +45,7 @@ void Input_Write(uint16_t MemAddress, uint8_t *pData, uint16_t Size) {
 	HAL_StatusTypeDef ret = HAL_I2C_Mem_Write(INPUT_I2C, MPR121_ADDR, MemAddress, I2C_MEMADD_SIZE_8BIT, pData, Size,
 	HAL_MAX_DELAY);
 	if (ret != HAL_OK) {
-		printf("Failed to write to input\n");
+		input_connected = 0;
 	}
 }
 
@@ -52,7 +58,7 @@ void Input_Read(uint16_t MemAddress, uint8_t *pData, uint16_t Size) {
 	HAL_StatusTypeDef ret = HAL_I2C_Mem_Read(INPUT_I2C, MPR121_ADDR, MemAddress, I2C_MEMADD_SIZE_8BIT, pData, Size,
 	HAL_MAX_DELAY);
 	if (ret != HAL_OK) {
-		printf("Failed to write to input\n");
+		input_connected = 0;
 	}
 }
 
@@ -69,7 +75,7 @@ void Input_Resolve() {
 		if (button && !status[i]) {
 			Input_Touched(i);
 		} else if (!button && status[i]) {
-			Input_Released(i);
+//			Input_Released(i);
 		}
 		status[i] = button;
 	}
@@ -115,10 +121,4 @@ void Input_Init() {
 	// enable X electrodes and start MPR121
 	uint8_t ECR_SETTING = 0b10000000 + 8; // 5 bits for baseline tracking & proximity disabled + 8 electrodes running
 	Input_Write_Byte(MPR121_ECR, ECR_SETTING); // start with above ECR setting
-}
-
-void HAL_GPIO_EXTI_Callback(uint16_t pin) {
-	if (pin & (1 << 8)) {
-		Input_Resolve();
-	}
 }

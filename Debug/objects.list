@@ -1,3 +1,4 @@
+"./Core/Src/callbacks.o"
 "./Core/Src/fatfs_sd.o"
 "./Core/Src/headlamp.o"
 "./Core/Src/input.o"

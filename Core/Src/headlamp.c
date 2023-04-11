@@ -17,14 +17,7 @@ void toggle_headlamp() {
 			printf("Light on\n");
 			headlamp_on = 1;
 		}
+		FIX_TIMER_TRIGGER(HEADLAMP_TIMER);
 		HAL_TIM_Base_Start_IT(HEADLAMP_TIMER);
 	}
 }
-
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
-	if (htim == HEADLAMP_TIMER) {
-		HAL_GPIO_WritePin(HEADLAMP_OUT_GPIO_Port, HEADLAMP_OUT_Pin, GPIO_PIN_SET);
-		HAL_TIM_Base_Stop_IT(HEADLAMP_TIMER);
-	}
-}
-

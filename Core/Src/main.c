@@ -46,11 +46,13 @@
 ADC_HandleTypeDef hadc1;
 
 I2C_HandleTypeDef hi2c1;
+I2C_HandleTypeDef hi2c3;
 
 SPI_HandleTypeDef hspi2;
 SPI_HandleTypeDef hspi3;
 
 TIM_HandleTypeDef htim10;
+TIM_HandleTypeDef htim11;
 
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
@@ -72,13 +74,45 @@ static void MX_USART2_UART_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_TIM10_Init(void);
 static void MX_USART1_UART_Init(void);
+static void MX_I2C3_Init(void);
+static void MX_TIM11_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+Network_Device devices[MAX_DEVICES];
+int num_registered_devices;
 
+XBee_Data XBee_Send;
+
+FATFS fs;
+FATFS *pfs;
+FIL fil;
+DWORD fre_clust;
+uint32_t total_space, free_space;
+
+void FS_Init() {
+	if (f_mount(&fs, "/", 0) != FR_OK) {
+		printf("Failed to mount SD Card\r\n");
+		exit(1);
+	}
+
+	if (f_getfree("", &fre_clust, &pfs) != FR_OK) {
+		printf("Free space check failed\r\n");
+		exit(1);
+	}
+
+	total_space = (uint32_t) ((pfs->n_fatent - 2) * pfs->csize * 0.5);
+	free_space = (uint32_t) (fre_clust * pfs->csize * 0.5);
+
+	/* free space is less than 1kb */
+	if (free_space < 1) {
+		printf("Drive is full\r\n");
+		exit(1);
+	}
+}
 /* USER CODE END 0 */
 
 /**
@@ -117,9 +151,16 @@ int main(void) {
 	MX_ADC1_Init();
 	MX_TIM10_Init();
 	MX_USART1_UART_Init();
+	MX_I2C3_Init();
+	MX_TIM11_Init();
 	/* USER CODE BEGIN 2 */
 	XBee_Init();
 	Input_Init();
+	FS_Init();
+
+	XBee_Broadcast_Identity("/me.wav");
+
+	printf("System ready\n");
 	/* USER CODE END 2 */
 
 	/* Infinite loop */
@@ -257,6 +298,38 @@ static void MX_I2C1_Init(void) {
 }
 
 /**
+ * @brief I2C3 Initialization Function
+ * @param None
+ * @retval None
+ */
+static void MX_I2C3_Init(void) {
+
+	/* USER CODE BEGIN I2C3_Init 0 */
+
+	/* USER CODE END I2C3_Init 0 */
+
+	/* USER CODE BEGIN I2C3_Init 1 */
+
+	/* USER CODE END I2C3_Init 1 */
+	hi2c3.Instance = I2C3;
+	hi2c3.Init.ClockSpeed = 100000;
+	hi2c3.Init.DutyCycle = I2C_DUTYCYCLE_2;
+	hi2c3.Init.OwnAddress1 = 0;
+	hi2c3.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+	hi2c3.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+	hi2c3.Init.OwnAddress2 = 0;
+	hi2c3.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+	hi2c3.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+	if (HAL_I2C_Init(&hi2c3) != HAL_OK) {
+		Error_Handler();
+	}
+	/* USER CODE BEGIN I2C3_Init 2 */
+
+	/* USER CODE END I2C3_Init 2 */
+
+}
+
+/**
  * @brief SPI2 Initialization Function
  * @param None
  * @retval None
@@ -358,6 +431,35 @@ static void MX_TIM10_Init(void) {
 }
 
 /**
+ * @brief TIM11 Initialization Function
+ * @param None
+ * @retval None
+ */
+static void MX_TIM11_Init(void) {
+
+	/* USER CODE BEGIN TIM11_Init 0 */
+
+	/* USER CODE END TIM11_Init 0 */
+
+	/* USER CODE BEGIN TIM11_Init 1 */
+
+	/* USER CODE END TIM11_Init 1 */
+	htim11.Instance = TIM11;
+	htim11.Init.Prescaler = 8400 - 1;
+	htim11.Init.CounterMode = TIM_COUNTERMODE_UP;
+	htim11.Init.Period = 65535;
+	htim11.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+	htim11.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+	if (HAL_TIM_Base_Init(&htim11) != HAL_OK) {
+		Error_Handler();
+	}
+	/* USER CODE BEGIN TIM11_Init 2 */
+
+	/* USER CODE END TIM11_Init 2 */
+
+}
+
+/**
  * @brief USART1 Initialization Function
  * @param None
  * @retval None
@@ -377,7 +479,7 @@ static void MX_USART1_UART_Init(void) {
 	huart1.Init.StopBits = UART_STOPBITS_1;
 	huart1.Init.Parity = UART_PARITY_NONE;
 	huart1.Init.Mode = UART_MODE_TX_RX;
-	huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+	huart1.Init.HwFlowCtl = UART_HWCONTROL_RTS_CTS;
 	huart1.Init.OverSampling = UART_OVERSAMPLING_16;
 	if (HAL_UART_Init(&huart1) != HAL_OK) {
 		Error_Handler();
@@ -429,7 +531,7 @@ static void MX_DMA_Init(void) {
 
 	/* DMA interrupt init */
 	/* DMA2_Stream2_IRQn interrupt configuration */
-	HAL_NVIC_SetPriority(DMA2_Stream2_IRQn, 0, 0);
+	HAL_NVIC_SetPriority(DMA2_Stream2_IRQn, 1, 0);
 	HAL_NVIC_EnableIRQ(DMA2_Stream2_IRQn);
 	/* DMA2_Stream7_IRQn interrupt configuration */
 	HAL_NVIC_SetPriority(DMA2_Stream7_IRQn, 0, 0);
@@ -495,7 +597,7 @@ static void MX_GPIO_Init(void) {
 	HAL_GPIO_Init(DAC_SPI2_CS_GPIO_Port, &GPIO_InitStruct);
 
 	/* EXTI interrupt init*/
-	HAL_NVIC_SetPriority(EXTI9_5_IRQn, 0, 0);
+	HAL_NVIC_SetPriority(EXTI9_5_IRQn, 1, 0);
 	HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
 
 }

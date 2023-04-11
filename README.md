@@ -10,12 +10,23 @@
 
 ## Wireless Communication
 
-Uses UART (`USART1`) over DMA to communicate with other devices using Xbee modules. Messages can target specific devices or all devices and contain a message type enum and an arbitrary data payload. Connect +3.3V and ground to the Xbee's `VCC` and `GND`, connect `XBEE_USART_RX` to the XBee's `DOUT`, and connect `XBEE_USART_TX` to the XBee's `DIN`.
+Uses UART (`USART1`) over DMA to communicate with other devices using Xbee modules. Messages can target specific devices or all devices and contain a message type enum and an arbitrary data payload. 
+
+## XBee Connections
+
+- +3.3V and ground to the Xbee's `VCC` and `GND`
+- `XBEE_USART_RX` to the XBee's `DOUT`
+- `XBEE_USART_TX` to the XBee's `DIN`
+- `XBEE_USART_RTS` to the XBee's `RTS`
+- `XBEE_USART_CTS` to the XBee's `CTS`
 
 ### XBee Configuration
 
 - Channel: 10
 - Baud Rate: 115200
+- Parity: Even
+- DIO7 Configuration: CTS
+- DIO6 Configuration: RTS
 - Transparent Mode (Default Mode)
 
 ### Usage

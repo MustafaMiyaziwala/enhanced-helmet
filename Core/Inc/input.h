@@ -5,6 +5,7 @@
 #include "xbee.h"
 
 void Input_Init();
+void Input_Resolve();
 
 extern I2C_HandleTypeDef hi2c1;
 

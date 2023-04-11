@@ -2,9 +2,13 @@
 #define __XBEE_H
 
 #include "stm32f4xx_hal.h"
+#include "ff.h"
+
+#define MIN_TRANSMIT_PERIOD 100
+#define MAX_PATH_LENGTH 20
 
 typedef enum {
-	PrintMessage, ToggleHeadlamp, Placeholder
+	PrintMessage, BroadcastIdentity, ReceiveFile, ImpactEvent
 } XBee_Command;
 
 typedef struct {
@@ -13,15 +17,21 @@ typedef struct {
 	uint8_t data[100];
 } XBee_Data;
 
+typedef struct {
+	uint32_t uid;
+	TCHAR file_path[MAX_PATH_LENGTH];
+} Network_Device;
+
 void XBee_Transmit(XBee_Data *data);
-void XBee_Receive(XBee_Data *data);
-void XBee_Resolve();
+int XBee_Transmit_File_Start(const TCHAR *path);
+void XBee_Transmit_File();
+void XBee_Broadcast_Identity();
 void XBee_Init();
 
 extern UART_HandleTypeDef huart1;
+extern TIM_HandleTypeDef htim11;
 
 #define XBEE_UART &huart1
-
-#define MIN_TRANSMIT_PERIOD 100
+#define FILE_TIMER &htim11
 
 #endif

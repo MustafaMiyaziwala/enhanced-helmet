@@ -90,6 +90,10 @@ void Error_Handler(void);
 #define XBEE_USART_TX_GPIO_Port GPIOA
 #define XBEE_USART_RX_Pin GPIO_PIN_10
 #define XBEE_USART_RX_GPIO_Port GPIOA
+#define XBEE_USART_CTS_Pin GPIO_PIN_11
+#define XBEE_USART_CTS_GPIO_Port GPIOA
+#define XBEE_USART_RTS_Pin GPIO_PIN_12
+#define XBEE_USART_RTS_GPIO_Port GPIOA
 #define TMS_Pin GPIO_PIN_13
 #define TMS_GPIO_Port GPIOA
 #define TCK_Pin GPIO_PIN_14
@@ -105,7 +109,8 @@ void Error_Handler(void);
 #define I2C1_SDA_Pin GPIO_PIN_7
 #define I2C1_SDA_GPIO_Port GPIOB
 /* USER CODE BEGIN Private defines */
-
+#define MAX_DEVICES 10
+#define FIX_TIMER_TRIGGER(handle_ptr) (__HAL_TIM_CLEAR_FLAG(handle_ptr, TIM_SR_UIF))
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus
