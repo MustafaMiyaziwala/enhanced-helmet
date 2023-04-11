@@ -65,6 +65,8 @@ int read_fifo_and_write_data_file();
 #define B1_EXTI_IRQn EXTI15_10_IRQn
 #define ULTRA_RIGHT_ADC_IN10_Pin GPIO_PIN_0
 #define ULTRA_RIGHT_ADC_IN10_GPIO_Port GPIOC
+#define ULTRA_RIGHT_ADC1_IN10_Pin GPIO_PIN_0
+#define ULTRA_RIGHT_ADC1_IN10_GPIO_Port GPIOC
 #define SD_SPI2_CS_Pin GPIO_PIN_1
 #define SD_SPI2_CS_GPIO_Port GPIOC
 #define SD_SPI2_MISO_Pin GPIO_PIN_2
@@ -85,6 +87,10 @@ int read_fifo_and_write_data_file();
 #define CAM_SPI1_CS_GPIO_Port GPIOC
 #define ULTRA_LEFT_ADC_IN8_Pin GPIO_PIN_0
 #define ULTRA_LEFT_ADC_IN8_GPIO_Port GPIOB
+#define LD2_Pin GPIO_PIN_5
+#define LD2_GPIO_Port GPIOA
+#define ULTRA_LEFT_ADC1_IN8_Pin GPIO_PIN_0
+#define ULTRA_LEFT_ADC1_IN8_GPIO_Port GPIOB
 #define ULTRA_CENTER_ADC1_IN9_Pin GPIO_PIN_1
 #define ULTRA_CENTER_ADC1_IN9_GPIO_Port GPIOB
 #define DAC_SPI2_CS_Pin GPIO_PIN_2
@@ -95,6 +101,10 @@ int read_fifo_and_write_data_file();
 #define TMS_GPIO_Port GPIOA
 #define TCK_Pin GPIO_PIN_14
 #define TCK_GPIO_Port GPIOA
+#define DAC_SPI3_SCK_Pin GPIO_PIN_10
+#define DAC_SPI3_SCK_GPIO_Port GPIOC
+#define DAC_SPI3_MOSI_Pin GPIO_PIN_12
+#define DAC_SPI3_MOSI_GPIO_Port GPIOC
 #define SWO_Pin GPIO_PIN_3
 #define SWO_GPIO_Port GPIOB
 #define IMU_I2C1_SCL_Pin GPIO_PIN_6
