@@ -1,20 +1,20 @@
 /* USER CODE BEGIN Header */
 /**
-  ******************************************************************************
-  * @file           : main.c
-  * @brief          : Main program body
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2023 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
+ ******************************************************************************
+ * @file           : main.c
+ * @brief          : Main program body
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2023 STMicroelectronics.
+ * All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
@@ -25,6 +25,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "OV5462.h"
+#include "distance_sensor_array.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -34,9 +35,13 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define CAMERA_SPI hspi1
+#define SD_SPI hspi2
+#define DAC_SPI hspi3
+
+#define CAMERA_CAPTURE_TIMER htim2
+#define DISTANCE_SENSOR_TIMER htim3
 #define CHUNK_SIZE 4096
-#define AVIOFFSET 240
-#define   rate     0x0a
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -46,6 +51,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc1;
+DMA_HandleTypeDef hdma_adc1;
 
 I2C_HandleTypeDef hi2c1;
 
@@ -54,48 +60,37 @@ SPI_HandleTypeDef hspi2;
 SPI_HandleTypeDef hspi3;
 
 TIM_HandleTypeDef htim2;
+TIM_HandleTypeDef htim3;
 
+UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
+// filesystem
 FATFS fs;
 FATFS * pfs;
 FIL fil;
 FRESULT fres;
 DWORD fre_clust;
 uint32_t total_space, free_space;
+uint bw;
+
+// devices
 OV5462_t ov5462;
+distance_sensor_array_t distance_sensor_array;
+
+// flags
+int init_complete = 0;
 int capture_flag = 0;
 int save_requested = 0;
 int check_capturing = 0;
 
-int is_header = 0;
-uint bw;
-unsigned long movi_size = 0;
-unsigned long jpeg_size = 0;
-const char zero_buf[4] = {0x00, 0x00, 0x00, 0x00};
-const int avi_header[AVIOFFSET] = {
-  0x52, 0x49, 0x46, 0x46, 0xD8, 0x01, 0x0E, 0x00, 0x41, 0x56, 0x49, 0x20, 0x4C, 0x49, 0x53, 0x54,
-  0xD0, 0x00, 0x00, 0x00, 0x68, 0x64, 0x72, 0x6C, 0x61, 0x76, 0x69, 0x68, 0x38, 0x00, 0x00, 0x00,
-  0xA0, 0x86, 0x01, 0x00, 0x80, 0x66, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00,
-  0x64, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x80, 0x02, 0x00, 0x00, 0xe0, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x4C, 0x49, 0x53, 0x54, 0x84, 0x00, 0x00, 0x00,
-  0x73, 0x74, 0x72, 0x6C, 0x73, 0x74, 0x72, 0x68, 0x30, 0x00, 0x00, 0x00, 0x76, 0x69, 0x64, 0x73,
-  0x4D, 0x4A, 0x50, 0x47, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x01, 0x00, 0x00, 0x00, rate, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0A, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x73, 0x74, 0x72, 0x66,
-  0x28, 0x00, 0x00, 0x00, 0x28, 0x00, 0x00, 0x00, 0x80, 0x02, 0x00, 0x00, 0xe0, 0x01, 0x00, 0x00,
-  0x01, 0x00, 0x18, 0x00, 0x4D, 0x4A, 0x50, 0x47, 0x00, 0x84, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x4C, 0x49, 0x53, 0x54,
-  0x10, 0x00, 0x00, 0x00, 0x6F, 0x64, 0x6D, 0x6C, 0x64, 0x6D, 0x6C, 0x68, 0x04, 0x00, 0x00, 0x00,
-  0x64, 0x00, 0x00, 0x00, 0x4C, 0x49, 0x53, 0x54, 0x00, 0x01, 0x0E, 0x00, 0x6D, 0x6F, 0x76, 0x69,
-};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_SPI2_Init(void);
 static void MX_USART2_UART_Init(void);
@@ -103,6 +98,8 @@ static void MX_ADC1_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_SPI3_Init(void);
 static void MX_TIM2_Init(void);
+static void MX_USART1_UART_Init(void);
+static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -110,7 +107,7 @@ static void MX_TIM2_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 int testSD() {
-/* Mount SD Card */
+	/* Mount SD Card */
 	int ret = 0;
 	if(f_mount(&fs, "/", 0) != FR_OK) {
 		printf("Failed to mount SD Card\r\n");
@@ -138,7 +135,7 @@ int testSD() {
 		return -1;
 	}
 
-//	printf("SD CARD MOUNTED! TESTING R/W...\r\n");
+	//	printf("SD CARD MOUNTED! TESTING R/W...\r\n");
 
 	f_puts("TEST", &fil);
 
@@ -164,7 +161,7 @@ int testSD() {
 		return -1;
 	}
 
-//	printf("PASSED: read file contents\r\n");
+	//	printf("PASSED: read file contents\r\n");
 
 	/* Close file */
 	if(f_close(&fil) != FR_OK) {
@@ -192,8 +189,6 @@ void trigger_capture() {
 }
 
 int read_fifo_and_write_data_file() {
-//	while (!(OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER) & CAPTURE_DONE_MASK)) {}; // wait for buffer to fill before saving
-//	while (!(OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER) & CAPTURE_DONE_MASK)) {}; // wait for final frame
 	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_RESET_READ);
 	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK); // clear flag
 
@@ -209,15 +204,13 @@ int read_fifo_and_write_data_file() {
 
 	if (length >= MAX_FIFO_LENGTH) {
 		printf("Buffer too large\r\n");
-		length = MAX_FIFO_LENGTH-1;
+		return -1;
 	}
 
 	if (length == 0) {
 		printf("Buffer empty\r\n");
 		return -1;
 	}
-
-//	length = MAX_FIFO_LENGTH-1; // !! ASSUME BUFFER IS FULL !!
 
 	int filename_len = snprintf(NULL, 0, "%d.DAT", video_id);
 	char* filename = malloc(filename_len+1);
@@ -251,24 +244,30 @@ int read_fifo_and_write_data_file() {
 	}
 
 	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
-	is_header = 0;
 	f_close(&fil);
 	printf("Save complete \r\n");
 	save_requested = 0;
 
 	trigger_capture();
 
-//	OV5462_continuous_capture_init(&ov5462); // restore continuous capture functionality
-
 	return 0;
 }
 
-void set_capture_flag(int f) {
-	capture_flag = f;
+/* INTERRUPT CALLBACKS */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim) {
+	if (!init_complete) return; // don't fire timer routines before init is done
+
+	if (htim == &DISTANCE_SENSOR_TIMER) {
+		update_readings_async(&distance_sensor_array);
+	} else if (htim == &CAMERA_CAPTURE_TIMER) {
+		capture_flag = 1;
+	}
 }
 
-void set_save_requested(int f) {
-	save_requested = f;
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+	if (GPIO_Pin == 7) {
+		save_requested = 1;
+	}
 }
 
 /* USER CODE END 0 */
@@ -301,6 +300,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_I2C1_Init();
   MX_SPI2_Init();
   MX_USART2_UART_Init();
@@ -309,105 +309,109 @@ int main(void)
   MX_SPI1_Init();
   MX_SPI3_Init();
   MX_TIM2_Init();
+  MX_USART1_UART_Init();
+  MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
-  HAL_TIM_Base_Start_IT(&htim2);
-  HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
-  	uint8_t buf[1] = { 0x00 }; // dummy write
-  	HAL_SPI_Transmit(&hspi1, buf, 1, 100);
+	HAL_TIM_Base_Start_IT(&htim2);
+	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
+	uint8_t buf[1] = { 0x00 }; // dummy write
+	HAL_SPI_Transmit(&hspi1, buf, 1, 100);
 
-  	ov5462.hi2c = &hi2c1;
-	ov5462.hspi = &hspi1;
+	ov5462.hi2c = &hi2c1;
+	ov5462.hspi = &CAMERA_SPI;
 
 	printf("program start!\r\n");
 
-  	HAL_Delay(1000);
+	HAL_Delay(1000);
 
-  	while (1) {
-		if(testSD()) {
-			printf("SD test FAIL! Retrying...\r\n");
-			f_mount(NULL, "/", 1);
-			HAL_Delay(10000);
+
+	/* INITIALIZATION + TESTS BEGIN */
+	if(testSD()) {
+		printf("SD test FAIL!\r\n");
+		return 1;
+	} else {
+		printf("SD test PASS!\r\n");
+	}
+
+
+	while (1) {
+		OV5462_write_spi_reg(&ov5462, 0x00, 0x25);
+		uint8_t tmp = OV5462_read_spi_reg(&ov5462, 0x00);
+
+		if (tmp == 0x25) {
+			printf("SPI Test PASS!\r\n");
+			break; // continue to program
 		} else {
-			printf("SD test PASS!\r\n");
-			break;
+			printf("SPI Test FAIL!\r\n");
+			HAL_Delay(1000);
 		}
-  	}
+	}
 
-  	while (1) {
-  		OV5462_write_spi_reg(&ov5462, 0x00, 0x25);
-  		uint8_t tmp = OV5462_read_spi_reg(&ov5462, 0x00);
+	while (1) {
+		uint8_t upper = OV5462_read_i2c_reg(&ov5462, CHIPID_UPPER);
+		uint8_t lower = OV5462_read_i2c_reg(&ov5462, CHIPID_LOWER);
 
-  		if (tmp == 0x25) {
-  		printf("SPI Test PASS!\r\n");
-  		break; // continue to program
-  		} else {
-  		printf("SPI Test FAIL!\r\n");
-  		HAL_Delay(1000);
-  		}
-  	}
+		if (upper == 0x56 && lower == 0x42) {
+			printf("I2C Test PASS!\r\n");
+			break; // continue to program
+		} else {
+			printf("I2C Test FAIL!\r\n");
+			HAL_Delay(1000);
+		}
+	}
 
-  	while (1) {
-  		uint8_t upper = OV5462_read_i2c_reg(&ov5462, CHIPID_UPPER);
-  		uint8_t lower = OV5462_read_i2c_reg(&ov5462, CHIPID_LOWER);
+	// camera init (sets to JPEG mode)
+	if (OV5462_init(&ov5462)) {
+		printf("Init fail!\r\n");
+	}
 
-  		if (upper == 0x56 && lower == 0x42) {
-  			printf("I2C Test PASS!\r\n");
-  			break; // continue to program
-  		} else {
-  			printf("I2C Test FAIL!\r\n");
-  			HAL_Delay(1000);
-  		}
-  	}
+	OV5462_continuous_capture_init(&ov5462);
 
-  	// camera init (sets to JPEG mode)
-  	if (OV5462_init(&ov5462)) {
-  		printf("Init fail!\r\n");
-  	}
+	/* INITIALIZATION + TESTS END */
 
-  	OV5462_continuous_capture_init(&ov5462);
-
-  	trigger_capture();
-  	check_capturing = 1;
-
-
+	trigger_capture();
+	check_capturing = 1;
+	init_complete = 1;
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
-  {
-	 if (capture_flag && (OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER) & CAPTURE_DONE_MASK)) {
-		 if (save_requested) {
-			 read_fifo_and_write_data_file();
-		 } else {
-			 trigger_capture();
-		 }
-	 }
+	while (1)
+	{
+		// a video capture is requested and the previous one is complete
+		if (!check_capturing && capture_flag && (OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER) & CAPTURE_DONE_MASK)) {
+			if (save_requested) {
+				read_fifo_and_write_data_file();
+			} else {
+				trigger_capture();
+			}
+		}
 
-	 if (check_capturing) {
-		 if (TIM2->CNT < 10000) {
-			 if (OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER) & CAPTURE_DONE_MASK) {
-				 uint32_t length = OV5462_read_fifo_length(&ov5462);
+		// make sure the capture didn't end too early
+		if (check_capturing) {
+			if (TIM2->CNT < 10000) {
+				if (OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER) & CAPTURE_DONE_MASK) {
+					uint32_t length = OV5462_read_fifo_length(&ov5462);
 
-				 if (length < 0x3FFFFF) {
-					 printf("Premature capture completion! %lu bytes \r\n", length);
+					if (length < 0x3FFFFF) {
+						printf("Premature capture completion! %lu bytes \r\n", length);
 
-					OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK);
-					OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_START_MASK);
-					check_capturing = 0;
-				 } else {
-					 OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK);
-					 OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_START_MASK);
-				 }
-			 }
-		 } else {
-			 check_capturing = 0; // it's been over a second, the capture probably started successfully
-		 }
-	 }
+						OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK);
+						OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_START_MASK);
+						check_capturing = 0;
+					} else {
+						OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK);
+						OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_START_MASK);
+					}
+				}
+			} else {
+				check_capturing = 0; // it's been over a second, the capture probably started successfully
+			}
+		}
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-  }
+	}
   /* USER CODE END 3 */
 }
 
@@ -478,15 +482,15 @@ static void MX_ADC1_Init(void)
   /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
   */
   hadc1.Instance = ADC1;
-  hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
+  hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV8;
   hadc1.Init.Resolution = ADC_RESOLUTION_12B;
-  hadc1.Init.ScanConvMode = DISABLE;
+  hadc1.Init.ScanConvMode = ENABLE;
   hadc1.Init.ContinuousConvMode = DISABLE;
   hadc1.Init.DiscontinuousConvMode = DISABLE;
   hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
   hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
   hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
-  hadc1.Init.NbrOfConversion = 1;
+  hadc1.Init.NbrOfConversion = 3;
   hadc1.Init.DMAContinuousRequests = DISABLE;
   hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
   if (HAL_ADC_Init(&hadc1) != HAL_OK)
@@ -496,9 +500,27 @@ static void MX_ADC1_Init(void)
 
   /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
   */
-  sConfig.Channel = ADC_CHANNEL_8;
+  sConfig.Channel = ADC_CHANNEL_0;
   sConfig.Rank = 1;
   sConfig.SamplingTime = ADC_SAMPLETIME_3CYCLES;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+  */
+  sConfig.Channel = ADC_CHANNEL_1;
+  sConfig.Rank = 2;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+  */
+  sConfig.Channel = ADC_CHANNEL_4;
+  sConfig.Rank = 3;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
     Error_Handler();
@@ -637,7 +659,7 @@ static void MX_SPI3_Init(void)
   /* SPI3 parameter configuration*/
   hspi3.Instance = SPI3;
   hspi3.Init.Mode = SPI_MODE_MASTER;
-  hspi3.Init.Direction = SPI_DIRECTION_2LINES;
+  hspi3.Init.Direction = SPI_DIRECTION_1LINE;
   hspi3.Init.DataSize = SPI_DATASIZE_8BIT;
   hspi3.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi3.Init.CLKPhase = SPI_PHASE_1EDGE;
@@ -703,6 +725,84 @@ static void MX_TIM2_Init(void)
 }
 
 /**
+  * @brief TIM3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM3_Init(void)
+{
+
+  /* USER CODE BEGIN TIM3_Init 0 */
+
+  /* USER CODE END TIM3_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM3_Init 1 */
+
+  /* USER CODE END TIM3_Init 1 */
+  htim3.Instance = TIM3;
+  htim3.Init.Prescaler = 8399;
+  htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim3.Init.Period = 1000;
+  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM3_Init 2 */
+
+  /* USER CODE END TIM3_Init 2 */
+
+}
+
+/**
+  * @brief USART1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART1_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART1_Init 0 */
+
+  /* USER CODE END USART1_Init 0 */
+
+  /* USER CODE BEGIN USART1_Init 1 */
+
+  /* USER CODE END USART1_Init 1 */
+  huart1.Instance = USART1;
+  huart1.Init.BaudRate = 115200;
+  huart1.Init.WordLength = UART_WORDLENGTH_8B;
+  huart1.Init.StopBits = UART_STOPBITS_1;
+  huart1.Init.Parity = UART_PARITY_NONE;
+  huart1.Init.Mode = UART_MODE_TX_RX;
+  huart1.Init.HwFlowCtl = UART_HWCONTROL_RTS_CTS;
+  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART1_Init 2 */
+
+  /* USER CODE END USART1_Init 2 */
+
+}
+
+/**
   * @brief USART2 Initialization Function
   * @param None
   * @retval None
@@ -736,6 +836,22 @@ static void MX_USART2_UART_Init(void)
 }
 
 /**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA2_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA2_Stream0_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA2_Stream0_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Stream0_IRQn);
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -749,12 +865,13 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
+  __HAL_RCC_GPIOD_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, SD_SPI2_CS_Pin|CAM_SPI1_CS_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOC, LAMP_ENABLE_Pin|SD_CS_Pin|CAM_CS_Pin|AMP_ENABLE_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(DAC_SPI2_CS_GPIO_Port, DAC_SPI2_CS_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(DAC_SPI_CS_GPIO_Port, DAC_SPI_CS_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : B1_Pin */
   GPIO_InitStruct.Pin = B1_Pin;
@@ -762,26 +879,38 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : SD_SPI2_CS_Pin */
-  GPIO_InitStruct.Pin = SD_SPI2_CS_Pin;
+  /*Configure GPIO pins : LAMP_ENABLE_Pin CAM_CS_Pin AMP_ENABLE_Pin */
+  GPIO_InitStruct.Pin = LAMP_ENABLE_Pin|CAM_CS_Pin|AMP_ENABLE_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : SD_CS_Pin */
+  GPIO_InitStruct.Pin = SD_CS_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(SD_SPI2_CS_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(SD_CS_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : CAM_SPI1_CS_Pin */
-  GPIO_InitStruct.Pin = CAM_SPI1_CS_Pin;
+  /*Configure GPIO pin : IMU_INT1_Pin */
+  GPIO_InitStruct.Pin = IMU_INT1_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(IMU_INT1_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : DAC_SPI_CS_Pin */
+  GPIO_InitStruct.Pin = DAC_SPI_CS_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(CAM_SPI1_CS_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(DAC_SPI_CS_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : DAC_SPI2_CS_Pin */
-  GPIO_InitStruct.Pin = DAC_SPI2_CS_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  /*Configure GPIO pin : PB7 */
+  GPIO_InitStruct.Pin = GPIO_PIN_7;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(DAC_SPI2_CS_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
   HAL_NVIC_SetPriority(EXTI15_10_IRQn, 1, 0);
@@ -793,12 +922,12 @@ static void MX_GPIO_Init(void)
 #ifdef __GNUC__
 #define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
 #else
-  #define PUTCHAR_PROTOTYPE int fputc(int ch, FILE *f)
+#define PUTCHAR_PROTOTYPE int fputc(int ch, FILE *f)
 #endif /* __GNUC__ */
 PUTCHAR_PROTOTYPE
 {
-  HAL_UART_Transmit(&huart2, (uint8_t *)&ch, 1, 0xFFFF);
-  return ch;
+	HAL_UART_Transmit(&huart2, (uint8_t *)&ch, 1, 0xFFFF);
+	return ch;
 }
 /* USER CODE END 4 */
 
@@ -809,11 +938,11 @@ PUTCHAR_PROTOTYPE
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
-  __disable_irq();
-  while (1)
-  {
-  }
+	/* User can add his own implementation to report the HAL error return state */
+	__disable_irq();
+	while (1)
+	{
+	}
   /* USER CODE END Error_Handler_Debug */
 }
 
@@ -828,7 +957,7 @@ void Error_Handler(void)
 void assert_failed(uint8_t *file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */
-  /* User can add his own implementation to report the file name and line number,
+	/* User can add his own implementation to report the file name and line number,
      ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
   /* USER CODE END 6 */
 }
