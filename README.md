@@ -24,10 +24,9 @@ Uses UART (`USART1`) over DMA to communicate with other devices using Xbee modul
 
 - Channel: 10
 - Baud Rate: 115200
-- Parity: Even
 - DIO7 Configuration: CTS
 - DIO6 Configuration: RTS
-- Transparent Mode (Default Mode)
+- Transparent Mode (Default Mode, don't have to change anything here just make sure API mode isn't on)
 
 ### Usage
 
