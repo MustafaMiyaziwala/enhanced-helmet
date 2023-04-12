@@ -1,9 +1,9 @@
 input.c:16:6:Input_Touched	3
-input.c:36:6:Input_Released	2
-input.c:44:6:Input_Write	2
-input.c:52:6:Input_Write_Byte	1
-input.c:57:6:Input_Read	2
-input.c:65:9:Input_Read_Byte	1
-input.c:71:6:Input_Resolve	4
-input.c:84:6:Input_Set_Thresholds	2
-input.c:91:6:Input_Init	1
+input.c:44:6:Input_Released	2
+input.c:52:6:Input_Write	2
+input.c:60:6:Input_Write_Byte	1
+input.c:65:6:Input_Read	2
+input.c:73:9:Input_Read_Byte	1
+input.c:79:6:Input_Resolve	6
+input.c:92:6:Input_Set_Thresholds	2
+input.c:99:6:Input_Init	2

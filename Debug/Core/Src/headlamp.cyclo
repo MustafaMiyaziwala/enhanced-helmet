@@ -1,1 +1,2 @@
-headlamp.c:7:6:toggle_headlamp	3
+headlamp.c:7:6:Headlamp_Init	1
+headlamp.c:12:6:toggle_headlamp	3

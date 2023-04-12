@@ -93,15 +93,15 @@ FIL fil;
 DWORD fre_clust;
 uint32_t total_space, free_space;
 
-void FS_Init() {
+int FS_Init() {
 	if (f_mount(&fs, "/", 0) != FR_OK) {
 		printf("Failed to mount SD Card\r\n");
-		exit(1);
+		return -1;
 	}
 
 	if (f_getfree("", &fre_clust, &pfs) != FR_OK) {
 		printf("Free space check failed\r\n");
-		exit(1);
+		return -1;
 	}
 
 	total_space = (uint32_t) ((pfs->n_fatent - 2) * pfs->csize * 0.5);
@@ -110,7 +110,7 @@ void FS_Init() {
 	/* free space is less than 1kb */
 	if (free_space < 1) {
 		printf("Drive is full\r\n");
-		exit(1);
+		return -1;
 	}
 }
 /* USER CODE END 0 */
@@ -154,11 +154,12 @@ int main(void) {
 	MX_I2C3_Init();
 	MX_TIM11_Init();
 	/* USER CODE BEGIN 2 */
-	XBee_Init();
+//	XBee_Init();
 	Input_Init();
-	FS_Init();
+//	FS_Init();
+	Headlamp_Init();
 
-	XBee_Broadcast_Identity("/me.wav");
+//	XBee_Broadcast_Identity("/me.wav");
 
 	printf("System ready\n");
 	/* USER CODE END 2 */

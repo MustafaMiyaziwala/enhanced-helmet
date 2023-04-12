@@ -14,27 +14,35 @@ int input_connected = 1;
 extern XBee_Data XBee_Send;
 
 void Input_Touched(int button) {
-	char buffer[50];
-	switch (button) {
-	case 0:
-		printf("Sending message\n");
-		XBee_Send.command = PrintMessage;
-		XBee_Send.target = 0;
-		sprintf(buffer, "Hello from device %u", (unsigned int) UID);
-		strcpy((char *) XBee_Send.data, buffer);
-		XBee_Transmit(&XBee_Send);
-		break;
-	case 1:
-		printf("Toggling headlamp\n");
-		toggle_headlamp();
-		break;
-	default:
+	if (button <= NUM_ELECTRODES) {
+		printf("Button %i pressed\n", button);
+	} else {
 		printf("Button not configured\n");
 	}
+	if (button == 5) {
+		toggle_headlamp();
+	}
+//	char buffer[50];
+//	switch (button) {
+//	case 0:
+//		printf("Sending message\n");
+//		XBee_Send.command = PrintMessage;
+//		XBee_Send.target = 0;
+//		sprintf(buffer, "Hello from device %u", (unsigned int) UID);
+//		strcpy((char *) XBee_Send.data, buffer);
+//		XBee_Transmit(&XBee_Send);
+//		break;
+//	case 1:
+//		printf("Toggling headlamp\n");
+//		toggle_headlamp();
+//		break;
+//	default:
+//		printf("Button not configured\n");
+//	}
 }
 
 void Input_Released(int button) {
-	if (button <= 1) {
+	if (button <= NUM_ELECTRODES) {
 		printf("Button %i released\n", button);
 	} else {
 		printf("Button not configured\n");
@@ -75,7 +83,7 @@ void Input_Resolve() {
 		if (button && !status[i]) {
 			Input_Touched(i);
 		} else if (!button && status[i]) {
-//			Input_Released(i);
+			Input_Released(i);
 		}
 		status[i] = button;
 	}
@@ -119,6 +127,11 @@ void Input_Init() {
 	Input_Write_Byte(MPR121_LOWLIMIT, 130);    // UPLIMIT * 0.65
 
 	// enable X electrodes and start MPR121
-	uint8_t ECR_SETTING = 0b10000000 + 8; // 5 bits for baseline tracking & proximity disabled + 8 electrodes running
+	uint8_t ECR_SETTING = 0b10000000 + NUM_ELECTRODES; // 5 bits for baseline tracking & proximity disabled + N electrodes running
 	Input_Write_Byte(MPR121_ECR, ECR_SETTING); // start with above ECR setting
+	if (input_connected) {
+		printf("Capacitive touch board initialized\n");
+	} else {
+		printf("Capacitive touch board not connected\n");
+	}
 }

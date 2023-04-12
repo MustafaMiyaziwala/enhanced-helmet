@@ -7,10 +7,11 @@
 void Input_Init();
 void Input_Resolve();
 
-extern I2C_HandleTypeDef hi2c1;
+extern I2C_HandleTypeDef hi2c3;
 
-#define INPUT_I2C &hi2c1
+#define INPUT_I2C &hi2c3
 #define INT_NUMBER 8;
+#define NUM_ELECTRODES 6
 
 #define MPR121_ADDR 0x5A << 1
 #define MPR121_TOUCH_THRESHOLD 12

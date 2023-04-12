@@ -34,7 +34,7 @@ Modify `xbee.h` an `xbee.c`. Add message types to `XBee_Command` and message pro
 
 ## Capacitive Touch Input
 
-TODO
+Modify `input.c` with your functions
 
 ## Headlamp
 
