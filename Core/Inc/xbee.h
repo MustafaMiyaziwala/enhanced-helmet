@@ -4,7 +4,6 @@
 #include "stm32f4xx_hal.h"
 #include "ff.h"
 
-#define MAX_DEVICES 3
 #define MIN_TRANSMIT_PERIOD 100
 #define MAX_PATH_LENGTH 20
 

@@ -5,7 +5,7 @@
 int headlamp_on = 0;
 
 void Headlamp_Init() {
-	HAL_Delay(500);
+	//HAL_Delay(500);
 	HAL_GPIO_WritePin(HEADLAMP_OUT_GPIO_Port, HEADLAMP_OUT_Pin, GPIO_PIN_SET);
 }
 
