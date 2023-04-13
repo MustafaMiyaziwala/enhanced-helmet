@@ -39,6 +39,9 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define DISABLE_NONZERO_IRQ() __set_BASEPRI(1 << 4)
+#define ENABLE_ALL_IRQ() __set_BASEPRI(0)
+
 #define CAMERA_SPI hspi1
 #define SD_SPI hspi2
 #define DAC_SPI hspi3
@@ -77,7 +80,7 @@ UART_HandleTypeDef huart2;
 // filesystem
 FATFS fs;
 FATFS * pfs;
-FIL fil;
+FIL fil; // belongs to camera
 FIL audio_fil;
 FRESULT fres;
 DWORD fre_clust;
@@ -92,15 +95,27 @@ Audio audio;
 // flags
 int event_flag = 0; // an impact has occurred, or help is requested
 int init_complete = 0;
+
 int capture_flag = 0;
 int save_requested = 0;
-int check_capturing = 0;
 
 // state
-int playing_audio = 0;
+enum CameraState { CAMERA_IDLE, CAMERA_RECAPTURE_WAIT, CAMERA_CHECK, CAMERA_SAVE };
+enum CameraState camera_state = CAMERA_IDLE;
 
-Network_Device devices[MAX_DEVICES];
+// xbee
+uint32_t devices[MAX_DEVICES];
 XBee_Data xbee_packet;
+
+// button array
+int input_connected = 1;
+
+// camera
+uint8_t curr_camera_byte=0;
+uint32_t camera_fifo_length = 0;
+int camera_buf_idx = 0;
+uint8_t camera_buf[CHUNK_SIZE];
+int video_id = 0;
 
 /* USER CODE END PV */
 
@@ -195,87 +210,11 @@ int testSD() {
 	return 0;
 }
 
-void trigger_capture() {
-	printf("Capture!\r\n");
-	capture_flag = 0;
-	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK); // clear flag
-	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_RESET_WRITE);
-	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_RESET_READ);
-	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_START_MASK); // start capture
-
-	check_capturing = 1;
-	TIM2->CNT = 0;
-}
-
-int read_fifo_and_write_data_file() {
-	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_RESET_READ);
-	OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK); // clear flag
-
-	uint8_t temp=0;
-	uint32_t length = 0;
-	int i = 0;
-	uint8_t buf[CHUNK_SIZE];
-
-	static int video_id = 0;
-
-	length = OV5462_read_fifo_length(&ov5462);
-	printf("Buffer length: %lu\r\n", length);
-
-	if (length >= MAX_FIFO_LENGTH) {
-		printf("Buffer too large\r\n");
-		return -1;
-	}
-
-	if (length == 0) {
-		printf("Buffer empty\r\n");
-		return -1;
-	}
-
-	int filename_len = snprintf(NULL, 0, "%d.DAT", video_id);
-	char* filename = malloc(filename_len+1);
-	snprintf(filename, filename_len+1, "%d.DAT", video_id);
-
-	FRESULT fr = f_open(&fil, filename, FA_OPEN_ALWAYS | FA_READ | FA_WRITE);
-	printf("%s\r\n", filename);
-	free(filename);
-	if (fr) printf("file open failed\r\n");
-	++video_id;
-	i = 0;
-
-	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
-	OV5462_request_FIFO_burst(&ov5462); // send FIFO burst command
-
-	while (length--) {
-		temp = SPI_OptimizedReadByte();
-		if (i < CHUNK_SIZE) {
-			buf[i++] = temp;
-		} else {
-			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
-
-			f_write(&fil, buf, sizeof(uint8_t)*CHUNK_SIZE, &bw);
-
-			i = 0;
-			buf[i++] = temp;
-			HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
-
-			OV5462_request_FIFO_burst(&ov5462); // send FIFO burst command
-		}
-	}
-
-	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
-	f_close(&fil);
-	printf("Save complete \r\n");
-	save_requested = 0;
-
-	trigger_capture();
-
-	return 0;
-}
-
 /* INTERRUPT CALLBACKS */
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim) {
-	if (!init_complete) return; // don't fire timer routines before init is done
-
+	if (htim == audio.htim) {
+		audio_callback(&audio);
+	}
 	if (htim == &DISTANCE_SENSOR_TIMER) {
 		update_readings_async(&distance_sensor_array);
 	} else if (htim == &CAMERA_CAPTURE_TIMER) {
@@ -283,6 +222,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim) {
 	} else if (htim == HEADLAMP_TIMER) {
 		HAL_GPIO_WritePin(HEADLAMP_OUT_GPIO_Port, HEADLAMP_OUT_Pin, GPIO_PIN_SET);
 		HAL_TIM_Base_Stop_IT(HEADLAMP_TIMER);
+	} else if (htim == FILE_TIMER) {
+		XBee_Transmit_File();
+		HAL_TIM_Base_Stop_IT(FILE_TIMER);
 	}
 }
 
@@ -290,6 +232,8 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 	// TODO: remove, this is just for testing
 	if (GPIO_Pin == 7) {
 		save_requested = 1;
+	} else if (GPIO_Pin & (1 << 8) && input_connected) {
+		Input_Resolve();
 	}
 }
 
@@ -337,6 +281,11 @@ int main(void)
 	MX_TIM10_Init();
 	MX_TIM4_Init();
 	/* USER CODE BEGIN 2 */
+	FIX_TIMER_TRIGGER(&htim2);
+	FIX_TIMER_TRIGGER(&htim3);
+	FIX_TIMER_TRIGGER(&htim4);
+	FIX_TIMER_TRIGGER(&htim10);
+
 	HAL_TIM_Base_Start_IT(&htim2);
 	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
 	uint8_t buf[1] = { 0x00 }; // dummy write
@@ -393,6 +342,13 @@ int main(void)
 	OV5462_continuous_capture_init(&ov5462);
 
 	// TODO: XBee init, connect to network, broadcast name file
+	XBee_Init();
+	Headlamp_Init();
+	Input_Init();
+
+	XBee_Handshake();
+	
+	// audio struct initialize
 	audio.fs = &fs;
 	audio.fil = &fil;
 	audio.ext_dac = &ext_dac;
@@ -400,10 +356,13 @@ int main(void)
 	audio.amp_enable_port = GPIOC;
 	audio.amp_enable_pin = GPIO_PIN_5;
 
+	audio_init(&audio);
+
+
+	
 	/* INITIALIZATION + TESTS END */
 
 	trigger_capture();
-	check_capturing = 1;
 	init_complete = 1;
 	/* USER CODE END 2 */
 
@@ -411,42 +370,99 @@ int main(void)
 	/* USER CODE BEGIN WHILE */
 	while (1)
 	{
-		if (event_flag) { // handle emergency event (impact, call for help, etc.)
-			// start audio
-			play_wav(&audio, "/AUDIO/IMPACT.WAV");
-			playing_audio = 1;
 
 
-		}
-		// a video capture is requested and the previous one is complete
-		if (!check_capturing && capture_flag && (OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER) & CAPTURE_DONE_MASK)) {
-			if (save_requested) {
-				read_fifo_and_write_data_file();
-			} else {
-				trigger_capture();
-			}
-		}
+		/* MAIN STATE MACHINE */
+		
+		
 
-		// make sure the capture didn't end too early
-		if (check_capturing) {
-			if (TIM2->CNT < 10000) {
-				if (OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER) & CAPTURE_DONE_MASK) {
-					uint32_t length = OV5462_read_fifo_length(&ov5462);
+		/* AUDIO BUFFER LOAD */
+		check_and_fill_audio_buf(&audio);
 
-					if (length < 0x3FFFFF) {
-						printf("Premature capture completion! %lu bytes \r\n", length);
+		/* CAMERA STATE MACHINE */
+		switch (camera_state) {
+			case CAMERA_IDLE:
+				if (save_requested) {
+					OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_RESET_READ);
+					OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK); // clear flag
 
-						OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK);
-						OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_START_MASK);
-						check_capturing = 0;
-					} else {
-						OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK);
-						OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_START_MASK);
-					}
+					camera_fifo_length = OV5462_read_fifo_length(&ov5462);
+					printf("Buffer length: %lu\r\n", camera_fifo_length);
+					int filename_len = snprintf(NULL, 0, "%d.DAT", video_id);
+					char* filename = malloc(filename_len+1);
+					snprintf(filename, filename_len+1, "%d.DAT", video_id);
+
+					FRESULT fr = f_open(&fil, filename, FA_OPEN_ALWAYS | FA_READ | FA_WRITE);
+					printf("%s\r\n", filename);
+					free(filename);
+					if (fr) printf("file open failed\r\n");
+					++video_id;
+					camera_buf_idx = 0;
+
+					OV5462_CS_Low(&ov5462);
+					OV5462_request_FIFO_burst(&ov5462); // send FIFO burst command
+
+					save_requested = 0;
+					camera_state = CAMERA_SAVE;
+				} else if (capture_flag) {
+					camera_state = CAMERA_RECAPTURE_WAIT;
+					capture_flag = 0;
 				}
-			} else {
-				check_capturing = 0; // it's been over a second, the capture probably started successfully
-			}
+				break;
+			
+			case CAMERA_RECAPTURE_WAIT:
+				if (OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER) & CAPTURE_DONE_MASK) {
+					OV5462_trigger_capture(&ov5462);
+
+					TIM2->CNT = 0;
+					camera_state = CAMERA_CHECK;
+				}
+				break;
+
+			case CAMERA_CHECK:
+				if (TIM2->CNT < 10000) {
+					if (OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER) & CAPTURE_DONE_MASK) {
+						// capture finished prematurely, restart it
+						OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK);
+						OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_START_MASK);
+						camera_state = CAMERA_IDLE;
+					}
+				} else {
+					camera_state = CAMERA_IDLE; // it's been over a second, the capture probably started successfully
+				}
+				break;
+
+			case CAMERA_SAVE:
+				if (camera_fifo_length--) {
+					DISABLE_NONZERO_IRQ();
+					curr_camera_byte = SPI_OptimizedReadByte();
+					ENABLE_ALL_IRQ();
+
+					if (camera_buf_idx < CHUNK_SIZE) {
+						camera_buf[camera_buf_idx++] = curr_camera_byte;
+					} else {
+						OV5462_CS_High();
+
+						DISABLE_NONZERO_IRQ();
+						f_write(&fil, buf, sizeof(uint8_t)*CHUNK_SIZE, &bw);
+						ENABLE_ALL_IRQ();
+
+						camera_buf_idx = 0;
+						camera_buf[camera_buf_idx++] = curr_camera_byte;
+						OV5462_CS_Low();
+
+						OV5462_request_FIFO_burst(&ov5462); // send FIFO burst command
+					}
+				} else { // buffer is empty, close file and immediately start re-capture
+					OV5462_CS_High();
+					f_close(&fil);
+					printf("Save complete \r\n");
+					OV5462_trigger_capture(&ov5462);
+
+					TIM2->CNT = 0;
+					camera_state = CAMERA_CHECK;
+				}
+				break;
 		}
 		/* USER CODE END WHILE */
 

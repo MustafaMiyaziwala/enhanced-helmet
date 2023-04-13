@@ -7,6 +7,7 @@
 #include "stm32f4xx_hal.h"
 
 #define AUDIO_BUF_LEN 1024
+#define MAX_AUDIO_QUEUE_LEN 4
 
 typedef struct WAV_Header {
 	uint32_t riff;
@@ -30,6 +31,7 @@ typedef struct Audio {
 	Ext_DAC_t* ext_dac;
 	TIM_HandleTypeDef* htim;
 	GPIO_TypeDef* amp_enable_port;
+	TCHAR* queue[MAX_AUDIO_QUEUE_LEN];
 
 
 	WAV_Header wav_header;
@@ -39,14 +41,17 @@ typedef struct Audio {
 	uint16_t amp_enable_pin;
 	uint8_t dac_buf_bank;
 	uint8_t dac_flag;
+	uint8_t read_pos;
+	uint8_t write_pos;
 } Audio;
 
+
+void audio_init(Audio* audio);
 
 /**
  * Call to start playing a specified wav file
  */
 void play_wav(Audio* audio, const TCHAR* filename);
-
 
 /*
  * Called periodically in super loop to check dac buffer
@@ -54,12 +59,19 @@ void play_wav(Audio* audio, const TCHAR* filename);
  */
 void check_and_fill_audio_buf(Audio* audio);
 
-
 /*
  * Callback to be executed in timer period exceeded ISR
  * to output the next audio sample to the DAC
  */
-void audio_callback(Audio* audio, TIM_HandleTypeDef *htim);
+void audio_callback(Audio* audio);
+
+/*
+* Returns whether audio is currently playing or not
+*/
+uint8_t is_playing(Audio* audio);
+
+
+
 
 
 

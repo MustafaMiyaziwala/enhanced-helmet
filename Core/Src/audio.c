@@ -18,39 +18,66 @@ static inline uint8_t fill_audio_buffer(Audio* audio, uint8_t buf_bank) {
 	return 1;
 }
 
+
 static inline void stop_audio(Audio* audio) {
 	HAL_TIM_Base_Stop_IT(audio->htim);
 	HAL_GPIO_WritePin(audio->amp_enable_port, audio->amp_enable_pin, GPIO_PIN_RESET);
 	shutdown_dac(audio->ext_dac);
 	f_close(audio->fil);
-	audio->dac_flag &= ~(1 << 2);
+	audio->dac_flag = 0;
 }
 
+static inline void play_next(Audio* audio) {
+	const TCHAR* filename = audio->queue[audio->read_pos];
 
-void play_wav(Audio* audio, const TCHAR* filename) {
-
-	if (audio->dac_flag & (1 << 2)) {
+	if (!filename) {
 		stop_audio(audio);
+		return;
 	}
 
 	UINT count;
 	f_open(audio->fil, filename, FA_OPEN_ALWAYS | FA_READ | FA_WRITE);
 	f_read(audio->fil, &audio->wav_header, sizeof(WAV_Header), &count);
 
+	audio->queue[audio->read_pos] = NULL;
+ 	audio->read_pos = (audio->read_pos + 1) % MAX_AUDIO_QUEUE_LEN;
+
 	audio->bytes_left = audio->wav_header.file_size;
 
 	fill_audio_buffer(audio, 0);
 	fill_audio_buffer(audio, 1);
 
-	audio->dac_flag |= (1 << 2);
+	if (!is_playing(audio)) {
+		HAL_GPIO_WritePin(audio->amp_enable_port, audio->amp_enable_pin, GPIO_PIN_SET);
+		audio->dac_flag |= (1 << 2);
+	}
+}
 
 
-	HAL_GPIO_WritePin(audio->amp_enable_port, audio->amp_enable_pin, GPIO_PIN_SET);
+void audio_init(Audio* audio) {
+	for (uint8_t i = 0; i < MAX_AUDIO_QUEUE_LEN; ++i) {
+		audio->queue[i] = NULL;
+	}
+
+	audio->read_pos = 0;
+	audio->write_pos = 0;
+	audio->dac_flag = 0;
+	audio->bytes_left = 0;
+}
+
+uint8_t is_playing(Audio* audio) {
+	return audio->dac_flag & (1 << 2);
+}
+
+
+void play_wav(Audio* audio, const TCHAR* filename) {
+	audio->queue[audio->write_pos] = filename;
+	audio->write_pos = (audio->write_pos + 1) % MAX_AUDIO_QUEUE_LEN;
 	HAL_TIM_Base_Start_IT(audio->htim);
 }
 
 void check_and_fill_audio_buf(Audio* audio) {
-	if (!(audio->dac_flag & (1 << 2))) {
+	if (!(is_playing(audio))) {
 		return;
 	}
 
@@ -63,13 +90,11 @@ void check_and_fill_audio_buf(Audio* audio) {
 	}
 }
 
-void audio_callback(Audio* audio, TIM_HandleTypeDef *htim) {
-	if (audio->htim != htim) {
-		return;
-	}
+void audio_callback(Audio* audio) {
 
 	if (!audio->bytes_left) {
-		stop_audio(audio);
+		shutdown_dac(audio->ext_dac);
+		play_next(audio);
 		return;
 	}
 
@@ -79,8 +104,10 @@ void audio_callback(Audio* audio, TIM_HandleTypeDef *htim) {
 		audio->dac_buf_idx = 0;
 	}
 
+	// ERROR CASE: stop and reinitialize
 	if (!(audio->dac_flag & 0b11)) {
 		stop_audio(audio);
+		init_audio(audio);
 		return;
 	}
 

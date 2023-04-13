@@ -9,13 +9,13 @@ extern uint32_t total_space, free_space;
 extern Network_Device devices[MAX_DEVICES];
 extern int num_registered_devices;
 
-extern XBee_Data XBee_Send;
+extern XBee_Data xbee_packet;
 
 uint32_t UID;
 XBee_Data XBee_Received;
 uint32_t last_transmit = 0;
 
-int transmitting_file;
+volatile int transmitting_file;
 int receiving_file;
 uint8_t *file_buf;
 FSIZE_t fsize;
@@ -153,13 +153,19 @@ int XBee_Resolve_File() {
 	return ret;
 }
 
-void XBee_Broadcast_Identity(TCHAR *file_path) {
+void XBee_Handshake() {
 	printf("Broadcasting identity\n");
-	XBee_Send.command = BroadcastIdentity;
-	XBee_Send.target = 0;
-	*((uint32_t *) XBee_Send.data) = UID;
-	strcpy((char *) &XBee_Send.data[sizeof(uint32_t)], file_path);
-	XBee_Transmit(&XBee_Send);
+	xbee_packet.command = BroadcastIdentity;
+	xbee_packet.target = 0;
+	*((uint32_t *) xbee_packet.data) = UID;
+	sprintf((char *) &xbee_packet.data[sizeof(uint32_t)], "%u.wav", (unsigned int) UID);
+	XBee_Transmit(&xbee_packet);
+	const TCHAR *path = (TCHAR *) &xbee_packet.data[sizeof(uint32_t)];
+	HAL_Delay(500);
+	printf("Transmitting file\n");
+	XBee_Transmit_File_Start(path);
+	while (transmitting_file);
+	xbee_packet.command = BroadcastIdentity;
 }
 
 void XBee_Init() {
