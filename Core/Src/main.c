@@ -45,6 +45,8 @@
 #define CAMERA_CAPTURE_TIMER htim2
 #define DISTANCE_SENSOR_TIMER htim3
 #define CHUNK_SIZE 4096
+
+#define IMU_INTERRUPT_PIN 9
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
