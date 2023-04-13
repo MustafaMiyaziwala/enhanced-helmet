@@ -1,6 +1,8 @@
 "./Core/Src/OV5462.o"
 "./Core/Src/OV5462_registers.o"
+"./Core/Src/audio.o"
 "./Core/Src/button_array.o"
+"./Core/Src/ext_dac.o"
 "./Core/Src/fatfs_sd.o"
 "./Core/Src/headlamp.o"
 "./Core/Src/main.o"

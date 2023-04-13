@@ -1,5 +1,5 @@
-#ifndef OV5462_H
-#define OV5462_H
+#ifndef __OV5462_H
+#define __OV5462_H
 
 #include "stm32f4xx_hal.h"
 #include <stdint.h>

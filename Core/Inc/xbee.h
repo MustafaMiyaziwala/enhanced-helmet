@@ -8,8 +8,6 @@
 #define MIN_TRANSMIT_PERIOD 100
 #define MAX_PATH_LENGTH 20
 
-#define FIX_TIMER_TRIGGER(handle_ptr) (__HAL_TIM_CLEAR_FLAG(handle_ptr, TIM_SR_UIF))
-
 typedef enum {
 	PrintMessage, BroadcastIdentity, ReceiveFile, ImpactEvent
 } XBee_Command;
