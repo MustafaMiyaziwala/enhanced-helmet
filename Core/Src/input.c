@@ -19,7 +19,7 @@ void Input_Touched(int button) {
 	} else {
 		printf("Button not configured\n");
 	}
-	if (button == 5) {
+	if (button == 2) {
 		toggle_headlamp();
 	}
 //	char buffer[50];
