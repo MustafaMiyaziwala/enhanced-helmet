@@ -63,8 +63,8 @@ int read_fifo_and_write_data_file();
 #define B1_Pin GPIO_PIN_13
 #define B1_GPIO_Port GPIOC
 #define B1_EXTI_IRQn EXTI15_10_IRQn
-#define LAMP_ENABLE_Pin GPIO_PIN_0
-#define LAMP_ENABLE_GPIO_Port GPIOC
+#define HEADLAMP_OUT_Pin GPIO_PIN_0
+#define HEADLAMP_OUT_GPIO_Port GPIOC
 #define SD_CS_Pin GPIO_PIN_1
 #define SD_CS_GPIO_Port GPIOC
 #define SD_MISO_Pin GPIO_PIN_2
