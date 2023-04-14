@@ -107,7 +107,7 @@ void audio_callback(Audio* audio) {
 	// ERROR CASE: stop and reinitialize
 	if (!(audio->dac_flag & 0b11)) {
 		stop_audio(audio);
-		init_audio(audio);
+		audio_init(audio);
 		return;
 	}
 

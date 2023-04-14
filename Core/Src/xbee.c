@@ -6,7 +6,7 @@
 extern FATFS fs;
 extern FIL fil;
 extern uint32_t total_space, free_space;
-extern Network_Device devices[MAX_DEVICES];
+extern Network_Device devices_removed[MAX_DEVICES];
 extern int num_registered_devices;
 
 extern XBee_Data xbee_packet;
@@ -99,13 +99,13 @@ void XBee_Resolve() {
 			}
 			uint32_t uid = *((uint32_t *) XBee_Received.data);
 			for (int i = 0; i < num_registered_devices; i++) {
-				if (devices[i].uid == uid) {
+				if (devices_removed[i].uid == uid) {
 					printf("Already registered device %u\n", (unsigned int) uid);
 					goto done;
 				}
 			}
-			devices[num_registered_devices].uid = uid;
-			strcpy(devices[num_registered_devices].file_path, (TCHAR *) &XBee_Received.data[sizeof(uint32_t)]);
+			devices_removed[num_registered_devices].uid = uid;
+			strcpy(devices_removed[num_registered_devices].file_path, (TCHAR *) &XBee_Received.data[sizeof(uint32_t)]);
 			num_registered_devices++;
 			printf("Registered new device with UID %u\n", (unsigned int) uid);
 done:

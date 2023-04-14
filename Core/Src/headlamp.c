@@ -21,7 +21,6 @@ void toggle_headlamp() {
 			printf("Light on\n");
 			headlamp_on = 1;
 		}
-		FIX_TIMER_TRIGGER(HEADLAMP_TIMER);
 		HAL_TIM_Base_Start_IT(HEADLAMP_TIMER);
 	}
 }

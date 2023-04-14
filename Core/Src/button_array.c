@@ -9,7 +9,7 @@ extern uint32_t UID;
 
 uint8_t status[8];
 
-extern int input_connected = 1;
+extern int input_connected;
 extern XBee_Data XBee_Send;
 
 void Input_Touched(int button) {

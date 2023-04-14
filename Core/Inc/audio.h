@@ -31,7 +31,7 @@ typedef struct Audio {
 	Ext_DAC_t* ext_dac;
 	TIM_HandleTypeDef* htim;
 	GPIO_TypeDef* amp_enable_port;
-	TCHAR* queue[MAX_AUDIO_QUEUE_LEN];
+	const TCHAR* queue[MAX_AUDIO_QUEUE_LEN];
 
 
 	WAV_Header wav_header;

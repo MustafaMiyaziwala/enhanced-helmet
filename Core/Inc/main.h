@@ -95,8 +95,14 @@ int read_fifo_and_write_data_file();
 #define AMP_ENABLE_GPIO_Port GPIOC
 #define SD_SPI2_SCK_Pin GPIO_PIN_10
 #define SD_SPI2_SCK_GPIO_Port GPIOB
-#define IMU_INT1_Pin GPIO_PIN_9
-#define IMU_INT1_GPIO_Port GPIOC
+#define LEFT_HAPTIC_Pin GPIO_PIN_6
+#define LEFT_HAPTIC_GPIO_Port GPIOC
+#define CENTER_HAPTIC_Pin GPIO_PIN_7
+#define CENTER_HAPTIC_GPIO_Port GPIOC
+#define RIGHT_HAPTIC_Pin GPIO_PIN_8
+#define RIGHT_HAPTIC_GPIO_Port GPIOC
+#define IMU_INT_Pin GPIO_PIN_9
+#define IMU_INT_GPIO_Port GPIOC
 #define XBEE_TX_Pin GPIO_PIN_9
 #define XBEE_TX_GPIO_Port GPIOA
 #define XBEE_RX_Pin GPIO_PIN_10
@@ -113,14 +119,13 @@ int read_fifo_and_write_data_file();
 #define DAC_SCK_GPIO_Port GPIOC
 #define DAC_MOSI_Pin GPIO_PIN_12
 #define DAC_MOSI_GPIO_Port GPIOC
-#define DAC_SPI_CS_Pin GPIO_PIN_2
-#define DAC_SPI_CS_GPIO_Port GPIOD
+#define DAC_CS_Pin GPIO_PIN_2
+#define DAC_CS_GPIO_Port GPIOD
 #define SWO_Pin GPIO_PIN_3
 #define SWO_GPIO_Port GPIOB
-#define IMU_I2C1_SCL_Pin GPIO_PIN_8
-#define IMU_I2C1_SCL_GPIO_Port GPIOB
-#define IMU_I2C1_SDA_Pin GPIO_PIN_9
-#define IMU_I2C1_SDA_GPIO_Port GPIOB
+#define BTN_INT_Pin GPIO_PIN_7
+#define BTN_INT_GPIO_Port GPIOB
+
 /* USER CODE BEGIN Private defines */
 
 /* USER CODE END Private defines */

@@ -19,6 +19,12 @@ typedef struct {
 	uint8_t data[100];
 } XBee_Data;
 
+typedef struct {
+	uint32_t uid;
+	TCHAR file_path[MAX_PATH_LENGTH];
+} Network_Device;
+
+
 void XBee_Transmit(XBee_Data *data);
 int XBee_Transmit_File_Start(const TCHAR *path);
 void XBee_Transmit_File();

@@ -7,9 +7,9 @@
 void Input_Init();
 void Input_Resolve();
 
-extern I2C_HandleTypeDef hi2c3;
+extern I2C_HandleTypeDef hi2c1;
 
-#define INPUT_I2C &hi2c3
+#define INPUT_I2C &hi2c1
 #define INT_NUMBER 8;
 #define NUM_ELECTRODES 6
 
