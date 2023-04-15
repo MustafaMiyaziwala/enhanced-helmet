@@ -118,6 +118,12 @@ int save_requested = 0;
 
 
 // state
+enum HandshakeState { XBEE_IDLE, XBEE_WAIT_TRANSFER };
+enum HandshakeState handshake_state = XBEE_IDLE;
+int in_handshake = 0;
+volatile int audio_requested = 0;
+volatile int transmitting_file = 0;
+
 enum CameraState { CAMERA_IDLE, CAMERA_RECAPTURE_WAIT, CAMERA_CHECK, CAMERA_SAVE };
 enum CameraState camera_state = CAMERA_IDLE;
 
@@ -366,6 +372,7 @@ int main(void)
 	FIX_TIMER_TRIGGER(&htim3);
 	FIX_TIMER_TRIGGER(&htim4);
 	FIX_TIMER_TRIGGER(&htim10);
+	FIX_TIMER_TRIGGER(&htim11);
 
 	HAL_TIM_Base_Start_IT(&htim2);
 
@@ -427,8 +434,23 @@ int main(void)
 #endif
 //
 //	// TODO: XBee init, connect to network, broadcast name file
-	//XBee_Init();
-	//XBee_Handshake();
+	XBee_Init();
+	XBee_Handshake();
+
+	in_handshake = 1;
+	while (in_handshake) {
+		switch (handshake_state) {
+			case XBEE_IDLE:
+				if (audio_requested) {
+					XBee_Transmit_File_Start(MY_FILE_PATH);
+					handshake_state = XBEE_WAIT_TRANSFER;
+				}
+				break;
+			case XBEE_WAIT_TRANSFER:
+				if (!transmitting_file) in_handshake = 0;
+				break;
+		}
+	}
 	//Headlamp_Init();
 	//PWM_RESET_IGNORE();
 	//PWM_SET_LEFT(127);
@@ -481,20 +503,20 @@ int main(void)
 	while (1)
 	{
 
-
-		if (countdown_flag && (audio.read_pos == audio.write_pos) && !is_playing(&audio)) {
-			event_flag = countdown_flag;
-			countdown_flag = 0;
-
-			if (event_flag == HELP_EVENT) {
-				play_wav(&audio, "/audio/request_sent.wav");
-			}
-			else {
-				play_wav(&audio, "/audio/alert_sent.wav");
-			}
-		}
-
-		printf("%d\n\r", countdown_flag);
+//
+//		if (countdown_flag && (audio.read_pos == audio.write_pos) && !is_playing(&audio)) {
+//			event_flag = countdown_flag;
+//			countdown_flag = 0;
+//
+//			if (event_flag == HELP_EVENT) {
+//				play_wav(&audio, "/audio/request_sent.wav");
+//			}
+//			else {
+//				play_wav(&audio, "/audio/alert_sent.wav");
+//			}
+//		}
+//
+//		printf("%d\n\r", countdown_flag);
 //		XBee_Handshake();
 		/* MAIN STATE MACHINE */
 		
@@ -1179,10 +1201,10 @@ static void MX_DMA_Init(void)
   HAL_NVIC_SetPriority(DMA2_Stream0_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA2_Stream0_IRQn);
   /* DMA2_Stream2_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Stream2_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(DMA2_Stream2_IRQn, 1, 0);
   HAL_NVIC_EnableIRQ(DMA2_Stream2_IRQn);
   /* DMA2_Stream7_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Stream7_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(DMA2_Stream7_IRQn, 1, 0);
   HAL_NVIC_EnableIRQ(DMA2_Stream7_IRQn);
 
 }

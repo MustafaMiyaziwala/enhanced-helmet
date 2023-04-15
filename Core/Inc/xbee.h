@@ -4,13 +4,19 @@
 #include "stm32f4xx_hal.h"
 #include "ff.h"
 
-#define MAX_DEVICES 3
+#define MAX_DEVICES 4
 #define MIN_TRANSMIT_PERIOD 100
-#define MAX_PATH_LENGTH 20
+#define MAX_PATH_LENGTH 50
+
+#define MY_FILE_PATH "/AUDIO/JOSEPH_MAFFETONE.WAV"
 
 typedef enum {
-	PrintMessage, BroadcastIdentity, RequestDevices, SendDevices, ReceiveFile, ImpactEvent
+	PrintMessage, ReceiveFile, // universal
+	Register, RequestDevices, ImpactEventAnnounce, HelpEventAnnounce, // only handled by base station (only sent by helmets)
+	RequestAudio, ReceiveDevices, ImpactEventRelay, HelpEventRelay // only handled by helmets (only sent by base station)
 } XBee_Command;
+
+
 
 typedef struct {
 	XBee_Command command;

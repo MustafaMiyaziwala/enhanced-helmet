@@ -10,13 +10,18 @@ extern Network_Device devices_removed[MAX_DEVICES];
 extern int num_registered_devices;
 
 extern XBee_Data xbee_packet;
+extern uint32_t devices[MAX_DEVICES];
 
 uint32_t UID;
 XBee_Data XBee_Received;
 uint32_t last_transmit = 0;
 
-volatile int transmitting_file;
+extern volatile int transmitting_file;
 int receiving_file;
+int is_receive_target = 0;
+
+extern volatile int audio_requested;
+
 uint8_t *file_buf;
 FSIZE_t fsize;
 FSIZE_t rsize;
@@ -87,66 +92,60 @@ void XBee_Receive_File() {
 }
 
 void XBee_Resolve() {
-	if (XBee_Received.target == 0 || XBee_Received.target == UID) {
+	if (XBee_Received.command == ReceiveFile) {
+		printf("Preparing to receive file\n");
+		rsize = *((FSIZE_t *) XBee_Received.data);
+		strcpy(rpath, (TCHAR *) &XBee_Received.data[sizeof(FSIZE_t)]);
+		is_receive_target = XBee_Received.target == 0 || XBee_Received.target == UID;
+		XBee_Receive_File();
+	} else if (XBee_Received.target == 0 || XBee_Received.target == UID) {
 		switch (XBee_Received.command) {
-		case PrintMessage:
-			printf("%s\n", (char *) XBee_Received.data);
-			break;
-		case BroadcastIdentity:
-			if (num_registered_devices == MAX_DEVICES) {
-				printf("Maximum registered network devices reached\n");
+			case PrintMessage:
+				printf("%s\n", (char *) XBee_Received.data);
 				break;
-			}
-			uint32_t uid = *((uint32_t *) XBee_Received.data);
-			for (int i = 0; i < num_registered_devices; i++) {
-				if (devices_removed[i].uid == uid) {
-					printf("Already registered device %u\n", (unsigned int) uid);
-					goto done;
+			case RequestAudio:
+				audio_requested = 1;
+				break;
+			case ReceiveDevices:
+				num_registered_devices = *((int *) XBee_Received.data);
+				for (int i = 0; i < num_registered_devices; i++) {
+					devices[i] = *((uint32_t *) &XBee_Received.data[sizeof(int) + i * sizeof(uint32_t)]);
 				}
-			}
-			devices_removed[num_registered_devices].uid = uid;
-			strcpy(devices_removed[num_registered_devices].file_path, (TCHAR *) &XBee_Received.data[sizeof(uint32_t)]);
-			num_registered_devices++;
-			printf("Registered new device with UID %u\n", (unsigned int) uid);
-done:
-			break;
-		case ReceiveFile:
-			printf("Preparing to receive file\n");
-			rsize = *((FSIZE_t *) XBee_Received.data);
-			strcpy(rpath, (TCHAR *) &XBee_Received.data[sizeof(FSIZE_t)]);
-			XBee_Receive_File();
-			break;
-		case ImpactEvent:
-			printf("Impacted detected on device %u\n", XBee_Received.data[0]);
-			break;
-		default:
-			printf("Unknown command received over network\n");
-		}
-		if (!receiving_file) {
-			XBee_Receive(&XBee_Received);
+				printf("Received device list\n");
+				break;
+			case ImpactEventRelay:
+				break;
+			case HelpEventRelay:
+				break;
+			default:
+				printf("Incorrect command for helmet\r\n");
 		}
 	}
 }
 
 int XBee_Resolve_File() {
 	int ret = 0;
-	ret = f_open(&fil, rpath, FA_OPEN_ALWAYS | FA_WRITE);
-	if(ret != FR_OK) {
-		printf("Failed to open file (%i) \r\n", ret);
-		return -1;
+	if (!is_receive_target) {
+		printf("Received file but not target of file transfer\n");
+	} else {
+		ret = f_open(&fil, rpath, FA_OPEN_ALWAYS | FA_WRITE);
+		if(ret != FR_OK) {
+			printf("Failed to open file (%i) \r\n", ret);
+			return -1;
+		}
+		UINT bytes_written;
+		ret = f_write(&fil, file_buf, rsize, &bytes_written);
+		if(ret != FR_OK) {
+			printf("Failed to write file (%i) \r\n", ret);
+			return -1;
+		}
+		ret = f_close(&fil);
+		if(ret != FR_OK) {
+			printf("Failed to close file (%i) \r\n", ret);
+			return -1;
+		}
+		printf("Received file\n");
 	}
-	UINT bytes_written;
-	ret = f_write(&fil, file_buf, rsize, &bytes_written);
-	if(ret != FR_OK) {
-		printf("Failed to write file (%i) \r\n", ret);
-		return -1;
-	}
-	ret = f_close(&fil);
-	if(ret != FR_OK) {
-		printf("Failed to close file (%i) \r\n", ret);
-		return -1;
-	}
-	printf("Received file\n");
 	free(file_buf);
 	receiving_file = 0;
 	XBee_Receive(&XBee_Received);
@@ -155,17 +154,11 @@ int XBee_Resolve_File() {
 
 void XBee_Handshake() {
 	printf("Broadcasting identity\r\n");
-	xbee_packet.command = BroadcastIdentity;
+	xbee_packet.command = Register;
 	xbee_packet.target = 0;
 	*((uint32_t *) xbee_packet.data) = UID;
-//	sprintf((char *) &xbee_packet.data[sizeof(uint32_t)], "%u.wav", (unsigned int) UID);
+	strcpy((char *) &xbee_packet.data[sizeof(uint32_t)], MY_FILE_PATH);
 	XBee_Transmit(&xbee_packet);
-//	const TCHAR *path = (TCHAR *) &xbee_packet.data[sizeof(uint32_t)];
-//	HAL_Delay(500);
-//	printf("Transmitting file\n");
-//	XBee_Transmit_File_Start(path);
-//	while (transmitting_file);
-//	xbee_packet.command = BroadcastIdentity;
 }
 
 void XBee_Init() {
