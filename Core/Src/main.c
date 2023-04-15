@@ -388,11 +388,11 @@ int main(void)
 #endif
 //
 //	// TODO: XBee init, connect to network, broadcast name file
-	//XBee_Init();
+	XBee_Init();
 	//XBee_Handshake();
 	Headlamp_Init();
 
-	//XBee_Handshake();
+//	XBee_Handshake();
 	
 	// audio struct initialize
 	ext_dac.cs_port = GPIOD;
@@ -439,8 +439,8 @@ int main(void)
   /* USER CODE BEGIN WHILE */
 	while (1)
 	{
-		//XBee_Handshake();
-		//HAL_Delay(5000);
+//		XBee_Handshake();
+//		HAL_Delay(5000);
 
 
 
