@@ -35,7 +35,7 @@ void XBee_Transmit(XBee_Data *data) {
 	}
 }
 
-int XBee_Transmit_File_Start(const TCHAR* path) {
+int XBee_Transmit_File_Start(const TCHAR* path, uint32_t target) {
 	printf("Preparing to transmit file\n");
 	if (transmitting_file == 0) {
 		int ret = 0;
@@ -59,7 +59,7 @@ int XBee_Transmit_File_Start(const TCHAR* path) {
 		}
 		XBee_Data data;
 		data.command = ReceiveFile;
-		data.target = 0;
+		data.target = target;
 		*((FSIZE_t *) data.data) = fsize;
 		strcpy((char *) &data.data[sizeof(FSIZE_t)], path);
 		XBee_Transmit(&data);

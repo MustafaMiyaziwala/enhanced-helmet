@@ -442,7 +442,7 @@ int main(void)
 		switch (handshake_state) {
 			case XBEE_IDLE:
 				if (audio_requested) {
-					XBee_Transmit_File_Start(MY_FILE_PATH);
+					XBee_Transmit_File_Start(MY_FILE_PATH, MASTER_UID);
 					handshake_state = XBEE_WAIT_TRANSFER;
 				}
 				break;
