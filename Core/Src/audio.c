@@ -53,8 +53,12 @@ static inline void play_next(Audio* audio) {
 	}
 }
 
-
 void audio_init(Audio* audio) {
+	clear_queue(audio);
+}
+
+void clear_queue(Audio* audio) {
+	HAL_TIM_Base_Stop_IT(audio->htim);
 	for (uint8_t i = 0; i < MAX_AUDIO_QUEUE_LEN; ++i) {
 		audio->queue[i] = NULL;
 	}

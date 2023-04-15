@@ -71,6 +71,9 @@ void audio_callback(Audio* audio);
 uint8_t is_playing(Audio* audio);
 
 
+void clear_queue(Audio* audio);
+
+
 
 
 

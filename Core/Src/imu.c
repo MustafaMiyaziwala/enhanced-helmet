@@ -14,10 +14,7 @@
 
 
 
-
-
-
-uint8_t imu_init(IMU_t* imu) {
+uint8_t imu_init(IMU* imu) {
 
 	uint8_t buf[2];
 
@@ -59,7 +56,7 @@ uint8_t imu_init(IMU_t* imu) {
 	//  Set control register 4:
 	//  - full scale selection +/- 16G
 	buf[0] = CTRL_REG_4;
-	buf[1] = 0b00110000;
+	buf[1] = 0b00100000;
 
 	if (HAL_I2C_Master_Transmit(imu->hi2c,
 		SAD_W, buf, 2, HAL_MAX_DELAY) != HAL_OK) {
@@ -93,7 +90,7 @@ uint8_t imu_init(IMU_t* imu) {
 
 }
 
-uint8_t imu_update(IMU_t* imu) {
+uint8_t imu_update(IMU* imu) {
 	uint8_t buf[6] = {READ_START_REG};
 
 	if (HAL_I2C_Master_Transmit(imu->hi2c, SAD_W, buf, 1, HAL_MAX_DELAY) != HAL_OK) {
@@ -112,7 +109,7 @@ uint8_t imu_update(IMU_t* imu) {
 }
 
 
-uint8_t imu_clear_int1(IMU_t* imu) {
+uint8_t imu_clear_int1(IMU* imu) {
 	uint8_t reg = INT1_SRC;
 
 	if (HAL_I2C_Master_Transmit(imu->hi2c, SAD_W, &reg, 1, HAL_MAX_DELAY) != HAL_OK) {

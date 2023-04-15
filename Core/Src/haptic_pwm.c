@@ -11,14 +11,14 @@ extern TIM_HandleTypeDef htim3;
 
 /* FLAG */
 /* Decides whether to ignore input */
-static uint8_t IGNORE = 0;
+static uint8_t ULTRASONIC_IGNORE;
 
 /* Y Intercept of linear */
 static uint16_t offset = 0; /* Offset to change base duty cycle of PWM */
 
 static inline uint32_t PWM_SET(uint32_t CHANNEL, uint8_t val) {
-	if (!IGNORE && val) {
-		uint16_t compareVal = (val << 8) | offset;
+	if (!ULTRASONIC_IGNORE && val) {
+		uint16_t compareVal = (val << 8) + offset;
 		__HAL_TIM_SetCompare(&htim3, CHANNEL, compareVal);
 		return PWM_ON;
 	}
@@ -49,14 +49,14 @@ uint8_t PWM_GET_OFFSET() {
 
 /* PWM commands */
 void PWM_SET_IGNORE() {
-	IGNORE = TRUE;
+	ULTRASONIC_IGNORE = TRUE;
 	PWM_SET(LEFT_PWM, 0);
 	PWM_SET(RIGHT_PWM, 0);
 	PWM_SET(CENTER_PWM, 0);
 }
 void PWM_RESET_IGNORE() {
-	IGNORE = FALSE;
+	ULTRASONIC_IGNORE = FALSE;
 }
 void PWM_TOGGLE_IGNORE() {
-	IGNORE = IGNORE ? TRUE : FALSE;
+	ULTRASONIC_IGNORE = ULTRASONIC_IGNORE ? TRUE : FALSE;
 }

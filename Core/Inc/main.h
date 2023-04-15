@@ -103,6 +103,7 @@ int read_fifo_and_write_data_file();
 #define RIGHT_HAPTIC_GPIO_Port GPIOC
 #define IMU_INT_Pin GPIO_PIN_9
 #define IMU_INT_GPIO_Port GPIOC
+#define IMU_INT_EXTI_IRQn EXTI9_5_IRQn
 #define XBEE_TX_Pin GPIO_PIN_9
 #define XBEE_TX_GPIO_Port GPIOA
 #define XBEE_RX_Pin GPIO_PIN_10
@@ -125,6 +126,7 @@ int read_fifo_and_write_data_file();
 #define SWO_GPIO_Port GPIOB
 #define BTN_INT_Pin GPIO_PIN_7
 #define BTN_INT_GPIO_Port GPIOB
+#define BTN_INT_EXTI_IRQn EXTI9_5_IRQn
 
 /* USER CODE BEGIN Private defines */
 

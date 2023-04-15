@@ -30,6 +30,7 @@
 #include "headlamp.h"
 #include "xbee.h"
 #include "audio.h"
+#include "imu.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -50,7 +51,6 @@
 #define DISTANCE_SENSOR_TIMER htim3
 #define CHUNK_SIZE 4096
 
-#define IMU_INTERRUPT_PIN 9
 
 //#define camera
 #define sd
@@ -100,12 +100,16 @@ OV5462_t ov5462;
 distance_sensor_array_t distance_sensor_array;
 Audio audio;
 Ext_DAC_t ext_dac;
+Buttons btns;
+IMU imu;
+
 // flags
 int event_flag = 0; // an impact has occurred, or help is requested
 int init_complete = 0;
 
 int capture_flag = 0;
 int save_requested = 0;
+
 
 // state
 enum CameraState { CAMERA_IDLE, CAMERA_RECAPTURE_WAIT, CAMERA_CHECK, CAMERA_SAVE };
@@ -116,10 +120,6 @@ uint32_t devices[MAX_DEVICES];
 XBee_Data xbee_packet;
 Network_Device devices_removed[MAX_DEVICES];
 int num_registered_devices;
-
-// button array
-int input_connected = 1;
-
 // camera
 uint8_t curr_camera_byte=0;
 uint32_t camera_fifo_length = 0;
@@ -244,8 +244,36 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 	if (GPIO_Pin == 0x2000) {
 		printf("Save requested\r\n");
 		save_requested = 1;
-	} else if (GPIO_Pin & (1 << 8) && input_connected) {
-		Input_Resolve();
+	} else if (GPIO_Pin & (1 << 7)) { // Buttons interrupt
+		switch (get_released_button(&btns)) {
+			case HELP_BTN:
+				printf("Help\r\n");
+				break;
+
+			case RECORD_BTN:
+				printf("Record\r\n");
+				play_wav(&audio, "/audio/CHIME.WAV");
+				play_wav(&audio, "/audio/save_video.wav");
+				// TODO: Set camera state machine
+				break;
+
+			case HAPTICS_BTN:
+				printf("Haptics\r\n");
+				break;
+
+			case LIGHT_BTN:
+				printf("Lights\r\n");
+				toggle_headlamp();
+				break;
+
+			default:
+				printf("None\r\n");
+				break;
+
+		}
+	} else if (GPIO_Pin & (1 << 9)) { // IMU collision interrupt
+		printf("Impact detected\r\n");
+		imu_clear_int1(&imu);
 	}
 }
 
@@ -296,10 +324,10 @@ int main(void)
   /* USER CODE BEGIN 2 */
 	FIX_TIMER_TRIGGER(&htim2);
 	FIX_TIMER_TRIGGER(&htim3);
-	//FIX_TIMER_TRIGGER(&htim4);
+	FIX_TIMER_TRIGGER(&htim4);
 	FIX_TIMER_TRIGGER(&htim10);
 
-	//HAL_TIM_Base_Start_IT(&htim2);
+	HAL_TIM_Base_Start_IT(&htim2);
 
 
 	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
@@ -362,8 +390,7 @@ int main(void)
 //	// TODO: XBee init, connect to network, broadcast name file
 	//XBee_Init();
 	//XBee_Handshake();
-	//Headlamp_Init();
-	//Input_Init();
+	Headlamp_Init();
 
 	//XBee_Handshake();
 	
@@ -380,8 +407,20 @@ int main(void)
 	audio.amp_enable_pin = GPIO_PIN_5;
 	audio_init(&audio);
 
-	play_wav(&audio, "/sine.wav");
-	play_wav(&audio, "/song.wav");
+	btns.hi2c = &hi2c1;
+	buttons_init(&btns);
+
+	imu.hi2c = &hi2c1;
+	imu_init(&imu);
+
+
+
+
+
+
+
+	//play_wav(&audio, "/sine.wav");
+	//play_wav(&audio, "/song.wav");
 
 
 	
@@ -407,6 +446,8 @@ int main(void)
 
 		/* MAIN STATE MACHINE */
 		
+		//imu_update(&imu);
+		//printf("%d\t%d\t%d\n\r", imu.x_accel, imu.y_accel, imu.z_accel);
 		
 
 		/* AUDIO BUFFER LOAD */
@@ -1153,11 +1194,14 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin : BTN_INT_Pin */
   GPIO_InitStruct.Pin = BTN_INT_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(BTN_INT_GPIO_Port, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI9_5_IRQn, 1, 0);
+  HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
+
   HAL_NVIC_SetPriority(EXTI15_10_IRQn, 1, 0);
   HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
