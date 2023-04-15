@@ -1,0 +1,13 @@
+OV5462.c:3:9:OV5462_write_i2c_reg	1
+OV5462.c:18:9:OV5462_write_i2c_regs	4
+OV5462.c:36:9:OV5462_read_i2c_reg	1
+OV5462.c:47:6:OV5462_write_spi_reg	1
+OV5462.c:62:9:OV5462_read_spi_reg	1
+OV5462.c:79:9:OV5462_init	10
+OV5462.c:100:6:OV5462_continuous_capture_init	1
+OV5462.c:114:10:OV5462_read_fifo_length	1
+OV5462.c:123:6:OV5462_request_FIFO_burst	1
+OV5462.c:128:9:SPI_OptimizedReadByte	2
+OV5462.c:135:6:OV5462_CS_High	1
+OV5462.c:138:6:OV5462_CS_Low	1
+OV5462.c:142:6:OV5462_trigger_capture	1

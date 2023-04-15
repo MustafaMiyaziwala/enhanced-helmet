@@ -108,8 +108,8 @@ enum CameraState camera_state = CAMERA_IDLE;
 
 // xbee
 uint32_t devices[MAX_DEVICES];
+int num_registered_devices;
 XBee_Data xbee_packet;
-Network_Device devices_removed[MAX_DEVICES];
 
 // button array
 int input_connected = 1;
@@ -352,11 +352,11 @@ int main(void)
 #endif
 //
 //	// TODO: XBee init, connect to network, broadcast name file
-//	XBee_Init();
+	XBee_Init();
 	Headlamp_Init();
-	//Input_Init();
+	Input_Init();
 
-	//XBee_Handshake();
+	XBee_Handshake();
 	
 	// audio struct initialize
 	ext_dac.cs_port = GPIOD;

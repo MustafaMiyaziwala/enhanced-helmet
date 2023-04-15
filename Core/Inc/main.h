@@ -127,7 +127,8 @@ int read_fifo_and_write_data_file();
 #define BTN_INT_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
-
+#define FIX_TIMER_TRIGGER(handle_ptr) (__HAL_TIM_CLEAR_FLAG(handle_ptr, TIM_SR_UIF))
+#define MAX_DEVICES 10
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

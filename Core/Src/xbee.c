@@ -6,17 +6,20 @@
 extern FATFS fs;
 extern FIL fil;
 extern uint32_t total_space, free_space;
-extern Network_Device devices_removed[MAX_DEVICES];
-extern int num_registered_devices;
 
+extern uint32_t devices[MAX_DEVICES];
+extern int num_registered_devices;
 extern XBee_Data xbee_packet;
 
 uint32_t UID;
 XBee_Data XBee_Received;
 uint32_t last_transmit = 0;
 
-volatile int transmitting_file;
-int receiving_file;
+volatile int transmitting_file = 0;
+volatile int receiving_devices = 0;
+int receiving_file = 0;
+int is_receive_target = 0;
+
 uint8_t *file_buf;
 FSIZE_t fsize;
 FSIZE_t rsize;
@@ -30,7 +33,7 @@ void XBee_Transmit(XBee_Data *data) {
 	}
 }
 
-int XBee_Transmit_File_Start(const TCHAR* path) {
+int XBee_Transmit_File_Start(const TCHAR* path, uint32_t target) {
 	printf("Preparing to transmit file\n");
 	if (transmitting_file == 0) {
 		int ret = 0;
@@ -54,7 +57,7 @@ int XBee_Transmit_File_Start(const TCHAR* path) {
 		}
 		XBee_Data data;
 		data.command = ReceiveFile;
-		data.target = 0;
+		data.target = target;
 		*((FSIZE_t *) data.data) = fsize;
 		strcpy((char *) &data.data[sizeof(FSIZE_t)], path);
 		XBee_Transmit(&data);
@@ -77,7 +80,11 @@ void XBee_Receive(XBee_Data *data) {
 
 void XBee_Receive_File() {
 	if (!receiving_file) {
-		printf("Receiving file\n");
+		printf("Receiving file");
+		if (!is_receive_target) {
+			printf(" but not target of file transfer");
+		}
+		printf("\n");
 		file_buf = (uint8_t *) malloc(rsize);
 		HAL_UART_Receive_DMA(XBEE_UART, file_buf, rsize);
 		receiving_file = 1;
@@ -87,7 +94,13 @@ void XBee_Receive_File() {
 }
 
 void XBee_Resolve() {
-	if (XBee_Received.target == 0 || XBee_Received.target == UID) {
+	if (XBee_Received.command == ReceiveFile) {
+		printf("Preparing to receive file\n");
+		rsize = *((FSIZE_t *) XBee_Received.data);
+		strcpy(rpath, (TCHAR *) &XBee_Received.data[sizeof(FSIZE_t)]);
+		is_receive_target = XBee_Received.target == 0 || XBee_Received.target == UID;
+		XBee_Receive_File();
+	} else if (XBee_Received.target == 0 || XBee_Received.target == UID) {
 		switch (XBee_Received.command) {
 		case PrintMessage:
 			printf("%s\n", (char *) XBee_Received.data);
@@ -99,22 +112,41 @@ void XBee_Resolve() {
 			}
 			uint32_t uid = *((uint32_t *) XBee_Received.data);
 			for (int i = 0; i < num_registered_devices; i++) {
-				if (devices_removed[i].uid == uid) {
+				if (devices[i] == uid) {
 					printf("Already registered device %u\n", (unsigned int) uid);
 					goto done;
 				}
 			}
-			devices_removed[num_registered_devices].uid = uid;
-			strcpy(devices_removed[num_registered_devices].file_path, (TCHAR *) &XBee_Received.data[sizeof(uint32_t)]);
+			devices[num_registered_devices] = uid;
 			num_registered_devices++;
 			printf("Registered new device with UID %u\n", (unsigned int) uid);
 done:
 			break;
-		case ReceiveFile:
-			printf("Preparing to receive file\n");
-			rsize = *((FSIZE_t *) XBee_Received.data);
-			strcpy(rpath, (TCHAR *) &XBee_Received.data[sizeof(FSIZE_t)]);
-			XBee_Receive_File();
+		case RequestDevices:
+//			printf("Sending device files\n");
+//			const TCHAR path[MAX_PATH_LENGTH];
+//			for (int i = 0; i < num_registered_devices; i++) {
+//				sprintf((char *) path, "/audio/%u.wav", (unsigned int) devices[i]);
+//				XBee_Transmit_File_Start(path, XBee_Received.source);
+//				while (transmitting_file);
+//			}
+			printf("Sending device list\n");
+			xbee_packet.command = SendDevices;
+			xbee_packet.source = UID;
+			xbee_packet.target = XBee_Received.source;
+			*((int *) xbee_packet.data) = num_registered_devices;
+			for (int i = 0; i < num_registered_devices; i++) {
+				*((uint32_t *) &xbee_packet.data[sizeof(int) + i * sizeof(uint32_t)]) = devices[i];
+			}
+			XBee_Transmit(&xbee_packet);
+			break;
+		case SendDevices:
+			num_registered_devices = *((int *) XBee_Received.data);	
+			for (int i = 0; i < num_registered_devices; i++) {
+				devices[i] = *((uint32_t *) &XBee_Received.data[sizeof(int) + i * sizeof(uint32_t)]);
+			}
+			printf("Received device list\n");
+			receiving_devices = 0;
 			break;
 		case ImpactEvent:
 			printf("Impacted detected on device %u\n", XBee_Received.data[0]);
@@ -130,23 +162,27 @@ done:
 
 int XBee_Resolve_File() {
 	int ret = 0;
-	ret = f_open(&fil, rpath, FA_OPEN_ALWAYS | FA_WRITE);
-	if(ret != FR_OK) {
-		printf("Failed to open file (%i) \r\n", ret);
-		return -1;
+	if (!is_receive_target) {
+		printf("Received file but not target of file transfer\n");
+	} else {
+		ret = f_open(&fil, rpath, FA_OPEN_ALWAYS | FA_WRITE);
+		if(ret != FR_OK) {
+			printf("Failed to open file (%i) \r\n", ret);
+			return -1;
+		}
+		UINT bytes_written;
+		ret = f_write(&fil, file_buf, rsize, &bytes_written);
+		if(ret != FR_OK) {
+			printf("Failed to write file (%i) \r\n", ret);
+			return -1;
+		}
+		ret = f_close(&fil);
+		if(ret != FR_OK) {
+			printf("Failed to close file (%i) \r\n", ret);
+			return -1;
+		}
+		printf("Received file\n");
 	}
-	UINT bytes_written;
-	ret = f_write(&fil, file_buf, rsize, &bytes_written);
-	if(ret != FR_OK) {
-		printf("Failed to write file (%i) \r\n", ret);
-		return -1;
-	}
-	ret = f_close(&fil);
-	if(ret != FR_OK) {
-		printf("Failed to close file (%i) \r\n", ret);
-		return -1;
-	}
-	printf("Received file\n");
 	free(file_buf);
 	receiving_file = 0;
 	XBee_Receive(&XBee_Received);
@@ -154,18 +190,24 @@ int XBee_Resolve_File() {
 }
 
 void XBee_Handshake() {
+	printf("Requesting devices\n");
+	xbee_packet.command = RequestDevices;
+	xbee_packet.source = UID;
+	xbee_packet.target = MASTER_UID;
+	XBee_Transmit(&xbee_packet);
+	receiving_devices = 1;
+	while (receiving_devices);
 	printf("Broadcasting identity\n");
 	xbee_packet.command = BroadcastIdentity;
 	xbee_packet.target = 0;
 	*((uint32_t *) xbee_packet.data) = UID;
-	sprintf((char *) &xbee_packet.data[sizeof(uint32_t)], "%u.wav", (unsigned int) UID);
 	XBee_Transmit(&xbee_packet);
-	const TCHAR *path = (TCHAR *) &xbee_packet.data[sizeof(uint32_t)];
-	HAL_Delay(500);
-	printf("Transmitting file\n");
-	XBee_Transmit_File_Start(path);
-	while (transmitting_file);
-	xbee_packet.command = BroadcastIdentity;
+//	const TCHAR path[MAX_PATH_LENGTH];
+//	strcpy((char *) path, (char *) &xbee_packet.data[sizeof(uint32_t)]);
+//	HAL_Delay(500);
+//	printf("Transmitting file\n");
+//	XBee_Transmit_File_Start(path, 0);
+//	while (transmitting_file);
 }
 
 void XBee_Init() {

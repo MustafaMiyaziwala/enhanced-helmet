@@ -1,0 +1,5 @@
+audio.c:57:6:audio_init	1
+audio.c:68:9:is_playing	1
+audio.c:73:6:play_wav	1
+audio.c:79:6:check_and_fill_audio_buf	8
+audio.c:93:6:audio_callback	10

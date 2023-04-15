@@ -1,0 +1,8 @@
+haptic_pwm.c:32:10:PWM_SET_LEFT	3
+haptic_pwm.c:35:10:PWM_SET_RIGHT	3
+haptic_pwm.c:38:10:PWM_SET_CENTER	3
+haptic_pwm.c:43:6:PWM_SET_OFFSET	1
+haptic_pwm.c:46:9:PWM_GET_OFFSET	1
+haptic_pwm.c:51:6:PWM_SET_IGNORE	1
+haptic_pwm.c:57:6:PWM_RESET_IGNORE	1
+haptic_pwm.c:60:6:PWM_TOGGLE_IGNORE	1
