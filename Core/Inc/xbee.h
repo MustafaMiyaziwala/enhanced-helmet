@@ -3,13 +3,17 @@
 
 #include "stm32f4xx_hal.h"
 #include "ff.h"
+#include "string.h"
 
-#define MAX_DEVICES 3
 #define MIN_TRANSMIT_PERIOD 100
-#define MAX_PATH_LENGTH 20
+#define MAX_PATH_LENGTH 50
+#define MAX_DEVICES 4
+#define DEVICE_LIST_FILENAME "/DEVICES.LIST"
 
 typedef enum {
-	PrintMessage, BroadcastIdentity, RequestDevices, SendDevices, ReceiveFile, ImpactEvent
+	PrintMessage, ReceiveFile, // universal
+	Register, RequestDevices, ImpactEventAnnounce, HelpEventAnnounce, // only handled by base station (only sent by helmets)
+	RequestAudio, ReceiveDevices, ImpactEventRelay, HelpEventRelay // only handled by helmets (only sent by base station)
 } XBee_Command;
 
 typedef struct {
@@ -19,18 +23,11 @@ typedef struct {
 	uint8_t data[100];
 } XBee_Data;
 
-typedef struct {
-	uint32_t uid;
-	TCHAR file_path[MAX_PATH_LENGTH];
-} Network_Device;
-
-
 void XBee_Transmit(XBee_Data *data);
-int XBee_Transmit_File_Start(const TCHAR *path);
+int XBee_Transmit_File_Start(const TCHAR *path, uint32_t target);
 void XBee_Transmit_File();
-void XBee_Broadcast_Identity();
-void XBee_Init();
 void XBee_Handshake();
+void XBee_Init();
 
 extern UART_HandleTypeDef huart1;
 extern TIM_HandleTypeDef htim11;

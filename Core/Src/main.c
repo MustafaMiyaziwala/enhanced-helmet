@@ -25,12 +25,9 @@
 #include <stdio.h>
 #include <string.h>
 #include "OV5462.h"
-#include "distance_sensor_array.h"
-#include "button_array.h"
-#include "headlamp.h"
 #include "xbee.h"
 #include "audio.h"
-#include "imu.h"
+#include "headlamp.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -51,6 +48,7 @@
 #define DISTANCE_SENSOR_TIMER htim3
 #define CHUNK_SIZE 4096
 
+#define IMU_INTERRUPT_PIN 9
 
 //#define camera
 #define sd
@@ -94,15 +92,12 @@ FRESULT fres;
 DWORD fre_clust;
 uint32_t total_space, free_space;
 uint bw;
+uint br;
 
 // devices
 OV5462_t ov5462;
-distance_sensor_array_t distance_sensor_array;
 Audio audio;
 Ext_DAC_t ext_dac;
-Buttons btns;
-IMU imu;
-
 // flags
 int event_flag = 0; // an impact has occurred, or help is requested
 int init_complete = 0;
@@ -110,16 +105,21 @@ int init_complete = 0;
 int capture_flag = 0;
 int save_requested = 0;
 
-
 // state
 enum CameraState { CAMERA_IDLE, CAMERA_RECAPTURE_WAIT, CAMERA_CHECK, CAMERA_SAVE };
 enum CameraState camera_state = CAMERA_IDLE;
 
 // xbee
 uint32_t devices[MAX_DEVICES];
+char name_audio_paths[MAX_DEVICES][MAX_PATH_LENGTH];
+size_t name_audio_path_lengths[MAX_DEVICES];
+
 XBee_Data xbee_packet;
-Network_Device devices_removed[MAX_DEVICES];
-int num_registered_devices;
+int num_registered_devices = 0;
+
+// button array
+int input_connected = 1;
+
 // camera
 uint8_t curr_camera_byte=0;
 uint32_t camera_fifo_length = 0;
@@ -225,14 +225,8 @@ int testSD() {
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim) {
 	if (htim == audio.htim) {
 		audio_callback(&audio);
-	}
-	else if (htim == &DISTANCE_SENSOR_TIMER) {
-		update_readings_async(&distance_sensor_array);
 	} else if (htim == &CAMERA_CAPTURE_TIMER) {
 		capture_flag = 1;
-	} else if (htim == HEADLAMP_TIMER) {
-		HAL_GPIO_WritePin(HEADLAMP_OUT_GPIO_Port, HEADLAMP_OUT_Pin, GPIO_PIN_SET);
-		HAL_TIM_Base_Stop_IT(HEADLAMP_TIMER);
 	} else if (htim == FILE_TIMER) {
 		XBee_Transmit_File();
 		HAL_TIM_Base_Stop_IT(FILE_TIMER);
@@ -244,36 +238,6 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 	if (GPIO_Pin == 0x2000) {
 		printf("Save requested\r\n");
 		save_requested = 1;
-	} else if (GPIO_Pin & (1 << 7)) { // Buttons interrupt
-		switch (get_released_button(&btns)) {
-			case HELP_BTN:
-				printf("Help\r\n");
-				break;
-
-			case RECORD_BTN:
-				printf("Record\r\n");
-				play_wav(&audio, "/audio/CHIME.WAV");
-				play_wav(&audio, "/audio/save_video.wav");
-				// TODO: Set camera state machine
-				break;
-
-			case HAPTICS_BTN:
-				printf("Haptics\r\n");
-				break;
-
-			case LIGHT_BTN:
-				printf("Lights\r\n");
-				toggle_headlamp();
-				break;
-
-			default:
-				printf("None\r\n");
-				break;
-
-		}
-	} else if (GPIO_Pin & (1 << 9)) { // IMU collision interrupt
-		printf("Impact detected\r\n");
-		imu_clear_int1(&imu);
 	}
 }
 
@@ -324,10 +288,10 @@ int main(void)
   /* USER CODE BEGIN 2 */
 	FIX_TIMER_TRIGGER(&htim2);
 	FIX_TIMER_TRIGGER(&htim3);
-	FIX_TIMER_TRIGGER(&htim4);
+	//FIX_TIMER_TRIGGER(&htim4);
 	FIX_TIMER_TRIGGER(&htim10);
 
-	HAL_TIM_Base_Start_IT(&htim2);
+	//HAL_TIM_Base_Start_IT(&htim2);
 
 
 	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
@@ -352,45 +316,12 @@ int main(void)
 	}
 #endif
 
-#ifdef camera
-	while (1) {
-		OV5462_write_spi_reg(&ov5462, 0x00, 0x25);
-		uint8_t tmp = OV5462_read_spi_reg(&ov5462, 0x00);
-
-		if (tmp == 0x25) {
-			printf("Camera SPI Test PASS!\r\n");
-			break; // continue to program
-		} else {
-			printf("Camera SPI Test FAIL!\r\n");
-			HAL_Delay(1000);
-		}
-	}
-
-	while (1) {
-		uint8_t upper = OV5462_read_i2c_reg(&ov5462, CHIPID_UPPER);
-		uint8_t lower = OV5462_read_i2c_reg(&ov5462, CHIPID_LOWER);
-
-		if (upper == 0x56 && lower == 0x42) {
-			printf("Camera I2C Test PASS!\r\n");
-			break; // continue to program
-		} else {
-			printf("Camera I2C Test FAIL!\r\n");
-			HAL_Delay(1000);
-		}
-	}
-
-	// camera init (sets to JPEG mode)
-	if (OV5462_init(&ov5462)) {
-		printf("Camera init fail!\r\n");
-	}
-
-	OV5462_continuous_capture_init(&ov5462);
-#endif
 //
 //	// TODO: XBee init, connect to network, broadcast name file
 	XBee_Init();
 	//XBee_Handshake();
-	Headlamp_Init();
+	//Headlamp_Init();
+	//Input_Init();
 
 //	XBee_Handshake();
 	
@@ -407,31 +338,17 @@ int main(void)
 	audio.amp_enable_pin = GPIO_PIN_5;
 	audio_init(&audio);
 
-	btns.hi2c = &hi2c1;
-	buttons_init(&btns);
-
-	imu.hi2c = &hi2c1;
-	imu_init(&imu);
-
-
-
-
-
-
-
-	//play_wav(&audio, "/sine.wav");
-	//play_wav(&audio, "/song.wav");
+//	play_wav(&audio, "/sine.wav");
+//	play_wav(&audio, "/song.wav");
 
 
 	
 	/* INITIALIZATION + TESTS END */
-
-#ifdef camera
-	OV5462_trigger_capture(&ov5462);
-	enum CameraState camera_state = CAMERA_CHECK;
-	TIM2->CNT = 0;
-#endif
 	init_complete = 1;
+
+	for (int i = 0; i < num_registered_devices; ++i) {
+		printf("%lu %u %s\r\n", devices[i], name_audio_path_lengths[i], name_audio_paths[i]);
+	}
 
   /* USER CODE END 2 */
 
@@ -446,8 +363,6 @@ int main(void)
 
 		/* MAIN STATE MACHINE */
 		
-		//imu_update(&imu);
-		//printf("%d\t%d\t%d\n\r", imu.x_accel, imu.y_accel, imu.z_accel);
 		
 
 		/* AUDIO BUFFER LOAD */
@@ -459,104 +374,6 @@ int main(void)
 //		HAL_Delay(5000);
 //		toggle_headlamp();
 //		HAL_Delay(5000);
-
-#ifdef camera
-		/* CAMERA STATE MACHINE */
-		switch (camera_state) {
-			case CAMERA_IDLE:
-				if (save_requested && (OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER) & CAPTURE_DONE_MASK)) {
-					OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_RESET_READ);
-					OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK); // clear flag
-
-					camera_fifo_length = OV5462_read_fifo_length(&ov5462);
-					printf("Buffer length: %lu\r\n", camera_fifo_length);
-					int filename_len = snprintf(NULL, 0, "%d.DAT", video_id);
-					char* filename = malloc(filename_len+1);
-					snprintf(filename, filename_len+1, "%d.DAT", video_id);
-
-					FRESULT fr = f_open(&fil, filename, FA_OPEN_ALWAYS | FA_READ | FA_WRITE);
-					printf("%s\r\n", filename);
-					free(filename);
-					if (fr) printf("file open failed\r\n");
-					++video_id;
-					camera_buf_idx = 0;
-
-					OV5462_CS_Low(&ov5462);
-					OV5462_request_FIFO_burst(&ov5462); // send FIFO burst command
-
-					save_requested = 0;
-					camera_state = CAMERA_SAVE;
-				} else if (!save_requested && capture_flag) {
-					camera_state = CAMERA_RECAPTURE_WAIT;
-					capture_flag = 0;
-				}
-				break;
-
-			case CAMERA_RECAPTURE_WAIT:
-				if (OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER) & CAPTURE_DONE_MASK) {
-					printf("capture\r\n");
-					OV5462_trigger_capture(&ov5462);
-
-					TIM2->CNT = 0;
-					camera_state = CAMERA_CHECK;
-				}
-				break;
-
-			case CAMERA_CHECK:
-				if (TIM2->CNT < 10000) {
-					if (OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER) & CAPTURE_DONE_MASK) {
-						// capture finished prematurely, restart it
-						uint32_t length = OV5462_read_fifo_length(&ov5462);
-
-						 if (length < 0x3FFFFF) {
-							 printf("Premature capture completion! %lu bytes \r\n", length);
-
-							OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK);
-							OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_START_MASK);
-							camera_state = CAMERA_IDLE;
-						 } else {
-							 OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK);
-							 OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_START_MASK);
-						 }
-					}
-				} else {
-					camera_state = CAMERA_IDLE; // it's been over a second, the capture probably started successfully
-				}
-				break;
-
-			case CAMERA_SAVE:
-				if (camera_fifo_length--) {
-					DISABLE_NONZERO_IRQ();
-					curr_camera_byte = SPI_OptimizedReadByte();
-					ENABLE_ALL_IRQ();
-
-					if (camera_buf_idx < CHUNK_SIZE) {
-						camera_buf[camera_buf_idx++] = curr_camera_byte;
-					} else {
-						OV5462_CS_High();
-
-						DISABLE_NONZERO_IRQ();
-						f_write(&fil, camera_buf, sizeof(uint8_t)*CHUNK_SIZE, &bw);
-						ENABLE_ALL_IRQ();
-
-						camera_buf_idx = 0;
-						camera_buf[camera_buf_idx++] = curr_camera_byte;
-						OV5462_CS_Low();
-
-						OV5462_request_FIFO_burst(&ov5462); // send FIFO burst command
-					}
-				} else { // fifo is empty, close file and immediately start re-capture
-					OV5462_CS_High();
-					f_close(&fil);
-					printf("Save complete \r\n");
-					OV5462_trigger_capture(&ov5462);
-
-					TIM2->CNT = 0;
-					camera_state = CAMERA_CHECK;
-				}
-				break;
-		}
-#endif
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -1127,10 +944,10 @@ static void MX_DMA_Init(void)
   HAL_NVIC_SetPriority(DMA2_Stream0_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA2_Stream0_IRQn);
   /* DMA2_Stream2_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Stream2_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(DMA2_Stream2_IRQn, 1, 0);
   HAL_NVIC_EnableIRQ(DMA2_Stream2_IRQn);
   /* DMA2_Stream7_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Stream7_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(DMA2_Stream7_IRQn, 1, 0);
   HAL_NVIC_EnableIRQ(DMA2_Stream7_IRQn);
 
 }
@@ -1143,8 +960,6 @@ static void MX_DMA_Init(void)
 static void MX_GPIO_Init(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
-/* USER CODE BEGIN MX_GPIO_Init_1 */
-/* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOC_CLK_ENABLE();
@@ -1205,8 +1020,6 @@ static void MX_GPIO_Init(void)
   HAL_NVIC_SetPriority(EXTI15_10_IRQn, 1, 0);
   HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
-/* USER CODE BEGIN MX_GPIO_Init_2 */
-/* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
