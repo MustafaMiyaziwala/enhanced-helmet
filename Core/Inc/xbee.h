@@ -7,7 +7,6 @@
 #define MAX_DEVICES 4
 #define MIN_TRANSMIT_PERIOD 100
 #define MAX_PATH_LENGTH 50
-#define CHUNK_SIZE 1000
 
 #define MY_FILE_PATH "/AUDIO/JOSEPH_MAFFETONE.WAV"
 
@@ -33,7 +32,7 @@ typedef struct {
 
 
 void XBee_Transmit(XBee_Data *data);
-int XBee_Transmit_File_Start(const TCHAR *path);
+int XBee_Transmit_File_Start(const TCHAR *path, uint32_t target);
 void XBee_Transmit_File();
 void XBee_Broadcast_Identity();
 void XBee_Init();

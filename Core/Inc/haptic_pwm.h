@@ -32,5 +32,6 @@ void PWM_SET_IGNORE();
 void PWM_RESET_IGNORE();
 void PWM_TOGGLE_IGNORE();
 
+void PWM_INIT();
 
 #endif
