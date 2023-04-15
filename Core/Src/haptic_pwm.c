@@ -18,7 +18,7 @@ static uint16_t offset = 0; /* Offset to change base duty cycle of PWM */
 
 static inline uint32_t PWM_SET(uint32_t CHANNEL, uint8_t val) {
 	if (!ULTRASONIC_IGNORE && val) {
-		uint16_t compareVal = (val << 8) + offset;
+		uint16_t compareVal = (val << 6) + offset;
 		__HAL_TIM_SetCompare(&htim3, CHANNEL, compareVal);
 		return PWM_ON;
 	}
@@ -48,7 +48,7 @@ uint8_t PWM_GET_OFFSET() {
 }
 
 
-void PWM_INIT() {
+void HAPTICS_INIT() {
 	HAL_TIM_PWM_Start(&htim3, CENTER_PWM);
 	HAL_TIM_PWM_Start(&htim3, LEFT_PWM);
 	HAL_TIM_PWM_Start(&htim3, RIGHT_PWM);

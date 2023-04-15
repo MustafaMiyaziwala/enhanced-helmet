@@ -49,7 +49,7 @@
 #define DAC_SPI hspi3
 
 #define CAMERA_CAPTURE_TIMER htim2
-#define DISTANCE_SENSOR_TIMER htim3
+#define DISTANCE_SENSOR_TIMER htim9
 #define CHUNK_SIZE 4096
 
 
@@ -80,6 +80,7 @@ SPI_HandleTypeDef hspi3;
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim4;
+TIM_HandleTypeDef htim9;
 TIM_HandleTypeDef htim10;
 TIM_HandleTypeDef htim11;
 
@@ -153,6 +154,7 @@ static void MX_TIM3_Init(void);
 static void MX_TIM10_Init(void);
 static void MX_TIM4_Init(void);
 static void MX_TIM11_Init(void);
+static void MX_TIM9_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -361,15 +363,17 @@ int main(void)
   MX_TIM10_Init();
   MX_TIM4_Init();
   MX_TIM11_Init();
+  MX_TIM9_Init();
   /* USER CODE BEGIN 2 */
 	FIX_TIMER_TRIGGER(&htim2);
 	FIX_TIMER_TRIGGER(&htim3);
 	FIX_TIMER_TRIGGER(&htim4);
 	FIX_TIMER_TRIGGER(&htim10);
+	FIX_TIMER_TRIGGER(&htim9);
 
 	HAL_TIM_Base_Start_IT(&htim2);
-
-	PWM_INIT();
+	HAL_TIM_Base_Start_IT(&htim9);
+	HAPTICS_INIT();
 
 	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
 	uint8_t buf[1] = { 0x00 }; // dummy write
@@ -431,7 +435,7 @@ int main(void)
 	//XBee_Handshake();
 	//Headlamp_Init();
 	//PWM_RESET_IGNORE();
-	//PWM_SET_LEFT(127);
+
 
 
 
@@ -455,6 +459,9 @@ int main(void)
 
 	imu.hi2c = &hi2c1;
 	imu_init(&imu);
+
+	//distance_sensor_array.hadc = &hadc1;
+	//distance_sensor_array.buf_pos = 0;
 
 
 
@@ -481,7 +488,7 @@ int main(void)
 	while (1)
 	{
 
-
+/*
 		if (countdown_flag && (audio.read_pos == audio.write_pos) && !is_playing(&audio)) {
 			event_flag = countdown_flag;
 			countdown_flag = 0;
@@ -494,7 +501,15 @@ int main(void)
 			}
 		}
 
-		printf("%d\n\r", countdown_flag);
+
+		PWM_SET_CENTER(get_motor_value(&distance_sensor_array, CENTER_SENSOR));
+		PWM_SET_LEFT(get_motor_value(&distance_sensor_array, LEFT_SENSOR));
+		PWM_SET_RIGHT(get_motor_value(&distance_sensor_array, RIGHT_SENSOR));
+
+*/
+		//HAL_Delay(20);
+
+		//printf("%d\n\r", countdown_flag);
 //		XBee_Handshake();
 		/* MAIN STATE MACHINE */
 		
@@ -945,7 +960,7 @@ static void MX_TIM3_Init(void)
 
   /* USER CODE END TIM3_Init 1 */
   htim3.Instance = TIM3;
-  htim3.Init.Prescaler = 8399;
+  htim3.Init.Prescaler = 439;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim3.Init.Period = 1000;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -1034,6 +1049,44 @@ static void MX_TIM4_Init(void)
   /* USER CODE BEGIN TIM4_Init 2 */
 
   /* USER CODE END TIM4_Init 2 */
+
+}
+
+/**
+  * @brief TIM9 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM9_Init(void)
+{
+
+  /* USER CODE BEGIN TIM9_Init 0 */
+
+  /* USER CODE END TIM9_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+
+  /* USER CODE BEGIN TIM9_Init 1 */
+
+  /* USER CODE END TIM9_Init 1 */
+  htim9.Instance = TIM9;
+  htim9.Init.Prescaler = 8399;
+  htim9.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim9.Init.Period = 2500;
+  htim9.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim9.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim9) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim9, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM9_Init 2 */
+
+  /* USER CODE END TIM9_Init 2 */
 
 }
 
@@ -1176,13 +1229,13 @@ static void MX_DMA_Init(void)
 
   /* DMA interrupt init */
   /* DMA2_Stream0_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Stream0_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(DMA2_Stream0_IRQn, 2, 0);
   HAL_NVIC_EnableIRQ(DMA2_Stream0_IRQn);
   /* DMA2_Stream2_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Stream2_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(DMA2_Stream2_IRQn, 2, 0);
   HAL_NVIC_EnableIRQ(DMA2_Stream2_IRQn);
   /* DMA2_Stream7_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Stream7_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(DMA2_Stream7_IRQn, 2, 0);
   HAL_NVIC_EnableIRQ(DMA2_Stream7_IRQn);
 
 }
