@@ -53,6 +53,8 @@
 #define IMU_INTERRUPT_PIN 9
 
 //#define camera
+//#define sd
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -78,6 +80,8 @@ TIM_HandleTypeDef htim11;
 
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
+DMA_HandleTypeDef hdma_usart1_rx;
+DMA_HandleTypeDef hdma_usart1_tx;
 
 /* USER CODE BEGIN PV */
 // filesystem
@@ -110,6 +114,7 @@ enum CameraState camera_state = CAMERA_IDLE;
 uint32_t devices[MAX_DEVICES];
 XBee_Data xbee_packet;
 Network_Device devices_removed[MAX_DEVICES];
+int num_registered_devices;
 
 // button array
 int input_connected = 1;
@@ -309,12 +314,14 @@ int main(void)
 
 
 //	/* INITIALIZATION + TESTS BEGIN */
+#ifdef sd
 	if(testSD()) {
 		printf("SD test FAIL!\r\n");
-		return 1;
+//		return 1;
 	} else {
 		printf("SD test PASS!\r\n");
 	}
+#endif
 
 #ifdef camera
 	while (1) {
@@ -352,7 +359,8 @@ int main(void)
 #endif
 //
 //	// TODO: XBee init, connect to network, broadcast name file
-//	XBee_Init();
+	XBee_Init();
+	XBee_Handshake();
 	Headlamp_Init();
 	//Input_Init();
 
@@ -381,12 +389,15 @@ int main(void)
 	TIM2->CNT = 0;
 #endif
 	init_complete = 1;
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 	while (1)
 	{
+		XBee_Handshake();
+		HAL_Delay(5000);
 
 
 		/* MAIN STATE MACHINE */
@@ -394,7 +405,9 @@ int main(void)
 		
 
 		/* AUDIO BUFFER LOAD */
-		check_and_fill_audio_buf(&audio);
+//		check_and_fill_audio_buf(&audio);
+
+
 
 //		toggle_headlamp();
 //		HAL_Delay(5000);
@@ -973,7 +986,7 @@ static void MX_TIM11_Init(void)
 
   /* USER CODE END TIM11_Init 1 */
   htim11.Instance = TIM11;
-  htim11.Init.Prescaler = 0;
+  htim11.Init.Prescaler = 8399;
   htim11.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim11.Init.Period = 65535;
   htim11.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -1067,6 +1080,12 @@ static void MX_DMA_Init(void)
   /* DMA2_Stream0_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA2_Stream0_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA2_Stream0_IRQn);
+  /* DMA2_Stream2_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA2_Stream2_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Stream2_IRQn);
+  /* DMA2_Stream7_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA2_Stream7_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Stream7_IRQn);
 
 }
 

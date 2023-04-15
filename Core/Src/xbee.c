@@ -154,23 +154,23 @@ int XBee_Resolve_File() {
 }
 
 void XBee_Handshake() {
-	printf("Broadcasting identity\n");
+	printf("Broadcasting identity\r\n");
 	xbee_packet.command = BroadcastIdentity;
 	xbee_packet.target = 0;
 	*((uint32_t *) xbee_packet.data) = UID;
-	sprintf((char *) &xbee_packet.data[sizeof(uint32_t)], "%u.wav", (unsigned int) UID);
+//	sprintf((char *) &xbee_packet.data[sizeof(uint32_t)], "%u.wav", (unsigned int) UID);
 	XBee_Transmit(&xbee_packet);
-	const TCHAR *path = (TCHAR *) &xbee_packet.data[sizeof(uint32_t)];
-	HAL_Delay(500);
-	printf("Transmitting file\n");
-	XBee_Transmit_File_Start(path);
-	while (transmitting_file);
-	xbee_packet.command = BroadcastIdentity;
+//	const TCHAR *path = (TCHAR *) &xbee_packet.data[sizeof(uint32_t)];
+//	HAL_Delay(500);
+//	printf("Transmitting file\n");
+//	XBee_Transmit_File_Start(path);
+//	while (transmitting_file);
+//	xbee_packet.command = BroadcastIdentity;
 }
 
 void XBee_Init() {
 	UID = HAL_GetUIDw0() + HAL_GetUIDw1() + HAL_GetUIDw2();
-	printf("UID: %u\n", (unsigned int) UID);
+	printf("UID: %u\r\n", (unsigned int) UID);
 	__HAL_TIM_SET_AUTORELOAD(FILE_TIMER, 5000);
 	XBee_Receive(&XBee_Received);
 }

@@ -30,6 +30,7 @@ int XBee_Transmit_File_Start(const TCHAR *path);
 void XBee_Transmit_File();
 void XBee_Broadcast_Identity();
 void XBee_Init();
+void XBee_Handshake();
 
 extern UART_HandleTypeDef huart1;
 extern TIM_HandleTypeDef htim11;
