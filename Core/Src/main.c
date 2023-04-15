@@ -53,7 +53,7 @@
 #define IMU_INTERRUPT_PIN 9
 
 //#define camera
-//#define sd
+#define sd
 
 /* USER CODE END PD */
 
@@ -88,6 +88,7 @@ DMA_HandleTypeDef hdma_usart1_tx;
 FATFS fs;
 FATFS * pfs;
 FIL fil; // belongs to camera
+FIL audio_fil;
 FIL audio_fil;
 FRESULT fres;
 DWORD fre_clust;
@@ -295,10 +296,10 @@ int main(void)
   /* USER CODE BEGIN 2 */
 	FIX_TIMER_TRIGGER(&htim2);
 	FIX_TIMER_TRIGGER(&htim3);
-	FIX_TIMER_TRIGGER(&htim4);
+	//FIX_TIMER_TRIGGER(&htim4);
 	FIX_TIMER_TRIGGER(&htim10);
 
-	HAL_TIM_Base_Start_IT(&htim2);
+	//HAL_TIM_Base_Start_IT(&htim2);
 
 
 	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
@@ -359,9 +360,9 @@ int main(void)
 #endif
 //
 //	// TODO: XBee init, connect to network, broadcast name file
-	XBee_Init();
-	XBee_Handshake();
-	Headlamp_Init();
+	//XBee_Init();
+	//XBee_Handshake();
+	//Headlamp_Init();
 	//Input_Init();
 
 	//XBee_Handshake();
@@ -372,12 +373,15 @@ int main(void)
 	ext_dac.hspi = &hspi3;
 
 	audio.fs = &fs;
-	audio.fil = &fil;
+	audio.fil = &audio_fil;
 	audio.ext_dac = &ext_dac;
 	audio.htim = &htim4;
 	audio.amp_enable_port = GPIOC;
 	audio.amp_enable_pin = GPIO_PIN_5;
 	audio_init(&audio);
+
+	play_wav(&audio, "/sine.wav");
+	play_wav(&audio, "/song.wav");
 
 
 	
@@ -396,8 +400,9 @@ int main(void)
   /* USER CODE BEGIN WHILE */
 	while (1)
 	{
-		XBee_Handshake();
-		HAL_Delay(5000);
+		//XBee_Handshake();
+		//HAL_Delay(5000);
+
 
 
 		/* MAIN STATE MACHINE */
@@ -405,8 +410,8 @@ int main(void)
 		
 
 		/* AUDIO BUFFER LOAD */
-//		check_and_fill_audio_buf(&audio);
-
+		check_and_fill_audio_buf(&audio);
+		//write_to_dac(&ext_dac, 127);
 
 
 //		toggle_headlamp();
@@ -762,12 +767,12 @@ static void MX_SPI3_Init(void)
   /* SPI3 parameter configuration*/
   hspi3.Instance = SPI3;
   hspi3.Init.Mode = SPI_MODE_MASTER;
-  hspi3.Init.Direction = SPI_DIRECTION_1LINE;
-  hspi3.Init.DataSize = SPI_DATASIZE_8BIT;
+  hspi3.Init.Direction = SPI_DIRECTION_2LINES;
+  hspi3.Init.DataSize = SPI_DATASIZE_16BIT;
   hspi3.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi3.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi3.Init.NSS = SPI_NSS_SOFT;
-  hspi3.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+  hspi3.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_4;
   hspi3.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi3.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi3.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -913,11 +918,11 @@ static void MX_TIM4_Init(void)
 
   /* USER CODE END TIM4_Init 1 */
   htim4.Instance = TIM4;
-  htim4.Init.Prescaler = 8399;
+  htim4.Init.Prescaler = 0;
   htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim4.Init.Period = 1000;
+  htim4.Init.Period = 7619;
   htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
   if (HAL_TIM_Base_Init(&htim4) != HAL_OK)
   {
     Error_Handler();
