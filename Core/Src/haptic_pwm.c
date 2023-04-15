@@ -3,15 +3,15 @@
 #define FALSE  0 /* LOGICAL FALSE*/
 #define	TRUE   1 /* LOGICAL TRUE */
 
-#define CENTER_PWM TIM_CHANNEL_1 /* NOTE these may change */
-#define LEFT_PWM   TIM_CHANNEL_2 /* fix these and it should work */
+#define CENTER_PWM TIM_CHANNEL_2
+#define LEFT_PWM   TIM_CHANNEL_1
 #define RIGHT_PWM  TIM_CHANNEL_3
 
 extern TIM_HandleTypeDef htim3;
 
 /* FLAG */
 /* Decides whether to ignore input */
-static uint8_t ULTRASONIC_IGNORE;
+extern uint8_t ULTRASONIC_IGNORE;
 
 /* Y Intercept of linear */
 static uint16_t offset = 0; /* Offset to change base duty cycle of PWM */
@@ -45,6 +45,14 @@ void PWM_SET_OFFSET(const uint16_t val) {
 }
 uint8_t PWM_GET_OFFSET() {
 	return offset;
+}
+
+
+void PWM_INIT() {
+	HAL_TIM_PWM_Start(&htim3, CENTER_PWM);
+	HAL_TIM_PWM_Start(&htim3, LEFT_PWM);
+	HAL_TIM_PWM_Start(&htim3, RIGHT_PWM);
+	ULTRASONIC_IGNORE = FALSE;
 }
 
 /* PWM commands */

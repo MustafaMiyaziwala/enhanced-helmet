@@ -26,6 +26,7 @@
 #include <string.h>
 #include "OV5462.h"
 #include "distance_sensor_array.h"
+#include "haptic_pwm.h"
 #include "button_array.h"
 #include "headlamp.h"
 #include "xbee.h"
@@ -50,6 +51,10 @@
 #define CAMERA_CAPTURE_TIMER htim2
 #define DISTANCE_SENSOR_TIMER htim3
 #define CHUNK_SIZE 4096
+
+
+#define HELP_EVENT 2
+#define IMPACT_EVENT 1
 
 
 //#define camera
@@ -104,8 +109,9 @@ Buttons btns;
 IMU imu;
 
 // flags
-int event_flag = 0; // an impact has occurred, or help is requested
-int init_complete = 0;
+uint8_t event_flag = 0; // an impact has occurred, or help is requested
+uint8_t init_complete = 0;
+uint8_t countdown_flag = 0;
 
 int capture_flag = 0;
 int save_requested = 0;
@@ -126,6 +132,8 @@ uint32_t camera_fifo_length = 0;
 int camera_buf_idx = 0;
 uint8_t camera_buf[CHUNK_SIZE];
 int video_id = 0;
+
+uint8_t ULTRASONIC_IGNORE = 0;
 
 /* USER CODE END PV */
 
@@ -245,20 +253,46 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 		printf("Save requested\r\n");
 		save_requested = 1;
 	} else if (GPIO_Pin & (1 << 7)) { // Buttons interrupt
-		switch (get_released_button(&btns)) {
+		uint8_t btn = get_released_button(&btns);
+
+		if (btn != NO_BTN && countdown_flag) {
+			clear_queue(&audio);
+			if (countdown_flag == HELP_EVENT) {
+				play_wav(&audio, "/audio/cancel_request.wav");
+			} else {
+				play_wav(&audio, "/audio/cancel_alert.wav");
+			}
+
+			countdown_flag = 0;
+		} else if (!is_playing(&audio)) {
+
+		switch (btn) {
 			case HELP_BTN:
 				printf("Help\r\n");
+				play_wav(&audio, "/audio/siren.wav"); // possibly change chime
+				play_wav(&audio, "/audio/help_siren.wav");
+				countdown_flag = HELP_EVENT;
+
 				break;
 
 			case RECORD_BTN:
 				printf("Record\r\n");
-				play_wav(&audio, "/audio/CHIME.WAV");
+				play_wav(&audio, "/audio/video_chime.wav");
 				play_wav(&audio, "/audio/save_video.wav");
 				// TODO: Set camera state machine
 				break;
 
 			case HAPTICS_BTN:
-				printf("Haptics\r\n");
+				if(ULTRASONIC_IGNORE) {
+					printf("Enabling Haptics\r\n");
+					play_wav(&audio, "/audio/enable_haptics.wav");
+
+					PWM_RESET_IGNORE();
+				} else {
+					printf("Disabling Haptics\r\n");
+					play_wav(&audio, "/audio/disable_haptics.wav");
+					PWM_SET_IGNORE();
+				}
 				break;
 
 			case LIGHT_BTN:
@@ -270,10 +304,16 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 				printf("None\r\n");
 				break;
 
+			}
 		}
+
+
 	} else if (GPIO_Pin & (1 << 9)) { // IMU collision interrupt
 		printf("Impact detected\r\n");
 		imu_clear_int1(&imu);
+		play_wav(&audio, "/audio/siren.wav");
+		play_wav(&audio, "/audio/impact_siren.wav");
+		countdown_flag = IMPACT_EVENT;
 	}
 }
 
@@ -329,6 +369,7 @@ int main(void)
 
 	HAL_TIM_Base_Start_IT(&htim2);
 
+	PWM_INIT();
 
 	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
 	uint8_t buf[1] = { 0x00 }; // dummy write
@@ -338,8 +379,6 @@ int main(void)
 	ov5462.hspi = &CAMERA_SPI;
 
 	printf("program start!\r\n");
-
-	HAL_Delay(1000);
 
 
 //	/* INITIALIZATION + TESTS BEGIN */
@@ -388,9 +427,13 @@ int main(void)
 #endif
 //
 //	// TODO: XBee init, connect to network, broadcast name file
-	XBee_Init();
+	//XBee_Init();
 	//XBee_Handshake();
-	Headlamp_Init();
+	//Headlamp_Init();
+	//PWM_RESET_IGNORE();
+	//PWM_SET_LEFT(127);
+
+
 
 //	XBee_Handshake();
 	
@@ -416,10 +459,7 @@ int main(void)
 
 
 
-
-
-
-	//play_wav(&audio, "/sine.wav");
+	//play_wav(&audio, "/save_video.wav");
 	//play_wav(&audio, "/song.wav");
 
 
@@ -431,6 +471,7 @@ int main(void)
 	enum CameraState camera_state = CAMERA_CHECK;
 	TIM2->CNT = 0;
 #endif
+	play_wav(&audio, "/audio/init.wav");
 	init_complete = 1;
 
   /* USER CODE END 2 */
@@ -439,11 +480,22 @@ int main(void)
   /* USER CODE BEGIN WHILE */
 	while (1)
 	{
+
+
+		if (countdown_flag && (audio.read_pos == audio.write_pos) && !is_playing(&audio)) {
+			event_flag = countdown_flag;
+			countdown_flag = 0;
+
+			if (event_flag == HELP_EVENT) {
+				play_wav(&audio, "/audio/request_sent.wav");
+			}
+			else {
+				play_wav(&audio, "/audio/alert_sent.wav");
+			}
+		}
+
+		printf("%d\n\r", countdown_flag);
 //		XBee_Handshake();
-//		HAL_Delay(5000);
-
-
-
 		/* MAIN STATE MACHINE */
 		
 		//imu_update(&imu);

@@ -23,7 +23,7 @@ static inline void stop_audio(Audio* audio) {
 	HAL_TIM_Base_Stop_IT(audio->htim);
 	HAL_GPIO_WritePin(audio->amp_enable_port, audio->amp_enable_pin, GPIO_PIN_RESET);
 	shutdown_dac(audio->ext_dac);
-	f_close(audio->fil);
+	//f_close(audio->fil);
 	audio->dac_flag = 0;
 }
 
@@ -43,9 +43,12 @@ static inline void play_next(Audio* audio) {
  	audio->read_pos = (audio->read_pos + 1) % MAX_AUDIO_QUEUE_LEN;
 
 	audio->bytes_left = audio->wav_header.file_size;
+	audio->dac_buf_bank = 0;
+	audio->dac_buf_idx = 0;
 
 	fill_audio_buffer(audio, 0);
 	fill_audio_buffer(audio, 1);
+
 
 	if (!is_playing(audio)) {
 		HAL_GPIO_WritePin(audio->amp_enable_port, audio->amp_enable_pin, GPIO_PIN_SET);
@@ -59,14 +62,16 @@ void audio_init(Audio* audio) {
 
 void clear_queue(Audio* audio) {
 	HAL_TIM_Base_Stop_IT(audio->htim);
+	audio->dac_flag = 0;
+
 	for (uint8_t i = 0; i < MAX_AUDIO_QUEUE_LEN; ++i) {
 		audio->queue[i] = NULL;
 	}
 
 	audio->read_pos = 0;
 	audio->write_pos = 0;
-	audio->dac_flag = 0;
 	audio->bytes_left = 0;
+	f_close(audio->fil);
 }
 
 uint8_t is_playing(Audio* audio) {
@@ -77,6 +82,7 @@ uint8_t is_playing(Audio* audio) {
 void play_wav(Audio* audio, const TCHAR* filename) {
 	audio->queue[audio->write_pos] = filename;
 	audio->write_pos = (audio->write_pos + 1) % MAX_AUDIO_QUEUE_LEN;
+	//audio->dac_flag |= (1 << 2);
 	HAL_TIM_Base_Start_IT(audio->htim);
 }
 
@@ -98,6 +104,7 @@ void audio_callback(Audio* audio) {
 
 	if (!audio->bytes_left) {
 		shutdown_dac(audio->ext_dac);
+		f_close(audio->fil);
 		play_next(audio);
 		return;
 	}
