@@ -131,3 +131,17 @@ uint8_t SPI_OptimizedReadByte(uint8_t* data) {
 	while (!((SPI1->SR) & (1<<0))) {};
 	return SPI1->DR;
 }
+
+void OV5462_CS_High() {
+	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
+}
+void OV5462_CS_Low() {
+	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
+}
+
+void OV5462_trigger_capture(OV5462_t* ov) {
+	OV5462_write_spi_reg(ov, ARDUCHIP_FIFO, FIFO_CLEAR_MASK); // clear flag
+	OV5462_write_spi_reg(ov, ARDUCHIP_FIFO, FIFO_RESET_WRITE);
+	OV5462_write_spi_reg(ov, ARDUCHIP_FIFO, FIFO_RESET_READ);
+	OV5462_write_spi_reg(ov, ARDUCHIP_FIFO, FIFO_START_MASK); // start capture
+}

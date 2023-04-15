@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "distance_sensor_array.h": "c",
+        "main.h": "c",
+        "stm32f4xx_hal.h": "c",
+        "stm32f4xx_hal_conf.h": "c"
+    }
+}

@@ -64,5 +64,8 @@ void OV5462_clear_fifo(OV5462_t*);
 uint32_t OV5462_read_fifo_length(OV5462_t*);
 void OV5462_request_FIFO_burst(OV5462_t*);
 uint8_t SPI_OptimizedReadByte();
+void OV5462_trigger_capture(OV5462_t*);
+void OV5462_CS_High();
+void OV5462_CS_Low();
 
 #endif
