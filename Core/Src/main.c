@@ -51,6 +51,8 @@
 #define CHUNK_SIZE 4096
 
 #define IMU_INTERRUPT_PIN 9
+
+//#define camera
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -313,17 +315,17 @@ int main(void)
 	} else {
 		printf("SD test PASS!\r\n");
 	}
-//
-//
+
+#ifdef camera
 	while (1) {
 		OV5462_write_spi_reg(&ov5462, 0x00, 0x25);
 		uint8_t tmp = OV5462_read_spi_reg(&ov5462, 0x00);
 
 		if (tmp == 0x25) {
-			printf("SPI Test PASS!\r\n");
+			printf("Camera SPI Test PASS!\r\n");
 			break; // continue to program
 		} else {
-			printf("SPI Test FAIL!\r\n");
+			printf("Camera SPI Test FAIL!\r\n");
 			HAL_Delay(1000);
 		}
 	}
@@ -333,20 +335,21 @@ int main(void)
 		uint8_t lower = OV5462_read_i2c_reg(&ov5462, CHIPID_LOWER);
 
 		if (upper == 0x56 && lower == 0x42) {
-			printf("I2C Test PASS!\r\n");
+			printf("Camera I2C Test PASS!\r\n");
 			break; // continue to program
 		} else {
-			printf("I2C Test FAIL!\r\n");
+			printf("Camera I2C Test FAIL!\r\n");
 			HAL_Delay(1000);
 		}
 	}
 
 	// camera init (sets to JPEG mode)
 	if (OV5462_init(&ov5462)) {
-		printf("Init fail!\r\n");
+		printf("Camera init fail!\r\n");
 	}
 
 	OV5462_continuous_capture_init(&ov5462);
+#endif
 //
 //	// TODO: XBee init, connect to network, broadcast name file
 //	XBee_Init();
@@ -372,9 +375,11 @@ int main(void)
 	
 	/* INITIALIZATION + TESTS END */
 
+#ifdef camera
 	OV5462_trigger_capture(&ov5462);
 	enum CameraState camera_state = CAMERA_CHECK;
 	TIM2->CNT = 0;
+#endif
 	init_complete = 1;
   /* USER CODE END 2 */
 
@@ -396,6 +401,7 @@ int main(void)
 //		toggle_headlamp();
 //		HAL_Delay(5000);
 
+#ifdef camera
 		/* CAMERA STATE MACHINE */
 		switch (camera_state) {
 			case CAMERA_IDLE:
@@ -461,18 +467,18 @@ int main(void)
 
 			case CAMERA_SAVE:
 				if (camera_fifo_length--) {
-//					DISABLE_NONZERO_IRQ();
+					DISABLE_NONZERO_IRQ();
 					curr_camera_byte = SPI_OptimizedReadByte();
-//					ENABLE_ALL_IRQ();
+					ENABLE_ALL_IRQ();
 
 					if (camera_buf_idx < CHUNK_SIZE) {
 						camera_buf[camera_buf_idx++] = curr_camera_byte;
 					} else {
 						OV5462_CS_High();
 
-//						DISABLE_NONZERO_IRQ();
+						DISABLE_NONZERO_IRQ();
 						f_write(&fil, camera_buf, sizeof(uint8_t)*CHUNK_SIZE, &bw);
-//						ENABLE_ALL_IRQ();
+						ENABLE_ALL_IRQ();
 
 						camera_buf_idx = 0;
 						camera_buf[camera_buf_idx++] = curr_camera_byte;
@@ -491,6 +497,7 @@ int main(void)
 				}
 				break;
 		}
+#endif
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
