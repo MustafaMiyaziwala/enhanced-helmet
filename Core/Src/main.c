@@ -52,7 +52,6 @@
 #define DISTANCE_SENSOR_TIMER htim9
 #define CHUNK_SIZE 4096
 
-
 #define HELP_EVENT 2
 #define IMPACT_EVENT 1
 
@@ -113,9 +112,12 @@ IMU imu;
 uint8_t event_flag = 0; // an impact has occurred, or help is requested
 uint8_t init_complete = 0;
 uint8_t countdown_flag = 0;
+uint8_t alert_flag = 0;
 
 int capture_flag = 0;
 int save_requested = 0;
+
+char victim_filepath[MAX_PATH_LENGTH];
 
 
 // state
@@ -124,9 +126,11 @@ enum CameraState camera_state = CAMERA_IDLE;
 
 // xbee
 uint32_t devices[MAX_DEVICES];
-XBee_Data xbee_packet;
-Network_Device devices_removed[MAX_DEVICES];
 int num_registered_devices;
+XBee_Data xbee_packet;
+uint32_t UID;
+uint32_t victim_uid = 0;
+
 // camera
 uint8_t curr_camera_byte=0;
 uint32_t camera_fifo_length = 0;
@@ -432,18 +436,12 @@ int main(void)
 
 	OV5462_continuous_capture_init(&ov5462);
 #endif
-//
-//	// TODO: XBee init, connect to network, broadcast name file
-	//XBee_Init();
-	//XBee_Handshake();
 	Headlamp_Init();
 	PWM_RESET_IGNORE();
-
-
-
-
-//	XBee_Handshake();
 	
+	XBee_Init();
+	XBee_Handshake();
+
 	// audio struct initialize
 	ext_dac.cs_port = GPIOD;
 	ext_dac.cs_pin = GPIO_PIN_2;
@@ -465,9 +463,6 @@ int main(void)
 
 	distance_sensor_array.hadc = &hadc1;
 
-
-
-
 	
 	/* INITIALIZATION + TESTS END */
 
@@ -485,45 +480,53 @@ int main(void)
   /* USER CODE BEGIN WHILE */
 	while (1)
 	{
-
-/*
-		if (countdown_flag && (audio.read_pos == audio.write_pos) && !is_playing(&audio)) {
-			event_flag = countdown_flag;
-			countdown_flag = 0;
-
-			if (event_flag == HELP_EVENT) {
-				play_wav(&audio, "/audio/request_sent.wav");
-			}
-			else {
-				play_wav(&audio, "/audio/alert_sent.wav");
-			}
-		}
-
-
+		/* UPDATES (ALWAYS RUN) */
 		PWM_SET_CENTER(get_motor_value(&distance_sensor_array, CENTER_SENSOR));
 		PWM_SET_LEFT(get_motor_value(&distance_sensor_array, LEFT_SENSOR));
 		PWM_SET_RIGHT(get_motor_value(&distance_sensor_array, RIGHT_SENSOR));
 
-*/
-		//HAL_Delay(20);
 
-		//printf("%d\n\r", countdown_flag);
-//		XBee_Handshake();
-		/* MAIN STATE MACHINE */
-		
-		//imu_update(&imu);
-		//printf("%d\t%d\t%d\n\r", imu.x_accel, imu.y_accel, imu.z_accel);
-		
-		//printf("%lu\r\n", get_motor_value(&distance_sensor_array, LEFT_SENSOR));
-		/* AUDIO BUFFER LOAD */
+		imu_update(&imu);
+
 		check_and_fill_audio_buf(&audio);
-		//write_to_dac(&ext_dac, 127);
+
+		/* MAIN STATE MACHINE */
+		if (countdown_flag && (audio.read_pos == audio.write_pos) && !is_playing(&audio)) {
+			event_flag = countdown_flag;
+			countdown_flag = 0;
+
+			xbee_packet.target = 0; // alert everyone
 
 
-//		toggle_headlamp();
-//		HAL_Delay(5000);
-//		toggle_headlamp();
-//		HAL_Delay(5000);
+			if (event_flag == HELP_EVENT) {
+				play_wav(&audio, "/audio/request_sent.wav");
+				xbee_packet.command = HelpEvent;
+			}
+			else {
+				play_wav(&audio, "/audio/alert_sent.wav");
+				xbee_packet.command = ImpactEvent;
+			}
+
+			XBee_Transmit(&xbee_packet);
+			save_requested = 1;
+
+			event_flag = 0;
+		}
+
+		if (alert_flag) {
+			clear_queue(&audio);
+			play_wav(&audio, "/audio/important_chime.wav");
+			sprintf(victim_filepath, "%u.wav", (uint) victim_uid);
+			play_wav(&audio, victim_filepath);
+
+			if (alert_flag == HELP_ALERT) {
+				play_wav(&audio, "/audio/help_response.wav");
+			} else if (alert_flag == IMPACT_ALERT) {
+				play_wav(&audio, "/audio/impact_response.wav");
+			}
+
+			alert_flag = 0;
+		}
 
 #ifdef camera
 		/* CAMERA STATE MACHINE */
