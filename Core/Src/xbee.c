@@ -9,8 +9,6 @@ extern uint32_t total_space, free_space;
 
 extern uint32_t devices[MAX_DEVICES];
 extern int num_registered_devices;
-extern char name_audio_paths[MAX_DEVICES][MAX_PATH_LENGTH];
-extern size_t name_audio_path_lengths[MAX_DEVICES];
 
 extern XBee_Data xbee_packet;
 
@@ -31,71 +29,6 @@ FRESULT fr;
 extern uint bw;
 extern uint br;
 
-static void load_known_devices() {
-	num_registered_devices = 0;
-	fr = f_open(&fil, DEVICE_LIST_FILENAME, FA_OPEN_EXISTING | FA_READ);
-	if (fr) {  // file error open/not found
-		return;
-	}
-
-	uint32_t uid;
-
-	int i = 0;
-
-	while (1) {
-		if (i >= MAX_DEVICES) return;
-		fr = f_read(&fil, (void*) &uid, sizeof uid, &br);
-		if (fr || br < sizeof uid) break; // eof
-		devices[i] = uid;
-		f_read(&fil, (void*) &name_audio_path_lengths[i], sizeof(size_t), &br);
-		f_read(&fil, (void*) &name_audio_paths[i], name_audio_path_lengths[i], &br);
-		++i;
-	}
-
-	num_registered_devices = i;
-	f_close(&fil);
-}
-
-static void store_known_devices() {
-	fr = f_open(&fil, DEVICE_LIST_FILENAME, FA_OPEN_ALWAYS | FA_WRITE);
-	for (int i = 0; i < num_registered_devices; ++i) {
-		f_write(&fil, (void*) &devices[i], sizeof(uint32_t), &bw);
-		f_write(&fil, (void*) &name_audio_path_lengths[i], sizeof(size_t), &bw);
-		f_write(&fil, (void*) &name_audio_paths[i], name_audio_path_lengths[i], &bw);
-	}
-	f_close(&fil);
-}
-
-// return:
-// 0 = new device created
-// 1 = existing device updated
-// 2 = existing device, no change
-// 3 = error
-static int add_update_device(uint32_t uid, char* audio_path) {
-	return 0;
-	for (int i = 0; i < num_registered_devices; ++i) {
-		if (devices[i] == uid) {
-			if (!strcmp(audio_path, name_audio_paths[i])) {
-				return 2; // no change
-			} else {
-				strcpy(name_audio_paths[i], audio_path);
-				name_audio_path_lengths[i] = strlen(audio_path)+1;
-				store_known_devices();
-				return 1;
-			}
-		}
-	}
-
-	// if we reached here, this is a new device!
-	if (num_registered_devices == MAX_DEVICES) return 3;
-	devices[num_registered_devices] = uid;
-	strcpy(name_audio_paths[num_registered_devices], audio_path);
-	name_audio_path_lengths[num_registered_devices] = strlen(audio_path)+1;
-	++num_registered_devices;
-	store_known_devices();
-	return 0;
-}
-
 void XBee_Transmit(XBee_Data *data) {
 	uint32_t time = HAL_GetTick();
 	if (last_transmit == 0 || time < last_transmit || time - last_transmit > MIN_TRANSMIT_PERIOD) {
@@ -104,43 +37,40 @@ void XBee_Transmit(XBee_Data *data) {
 	}
 }
 
-int XBee_Transmit_File_Start(const TCHAR* path, uint32_t target) {
-	printf("Preparing to transmit file\n");
+void XBee_Transmit_File_Start(const TCHAR* path, uint32_t target) {
+	printf("Preparing to transmit file\r\n");
 	if (transmitting_file == 0) {
 		int ret = 0;
-		ret = f_open(&fil, path, FA_OPEN_ALWAYS | FA_READ);
+		ret = f_open(&fil, path, FA_READ);
 		if(ret != FR_OK) {
-			printf("Failed to open file (%i) \r\n", ret);
-			return -1;
+			printf("Failed to open file (%i)\r\n", ret);
+			return;
 		}
 		fsize = f_size(&fil);
 		file_buf = (uint8_t *) malloc(fsize * sizeof(uint8_t));
-		UINT bytes_read;
-		ret = f_read(&fil, file_buf, fsize, &bytes_read);
+		ret = f_read(&fil, file_buf, fsize, &br);
 		if(ret != FR_OK) {
-			printf("Failed to read file (%i) \r\n", ret);
-			return -1;
+			printf("Failed to read file (%i)\r\n", ret);
+			return;
 		}
 		ret = f_close(&fil);
 		if(ret != FR_OK) {
-			printf("Failed to close file (%i) \r\n", ret);
-			return -1;
+			printf("Failed to close file (%i)\r\n", ret);
+			return;
 		}
-		XBee_Data data;
-		data.command = ReceiveFile;
-		data.target = target;
-		*((FSIZE_t *) data.data) = fsize;
-		strcpy((char *) &data.data[sizeof(FSIZE_t)], path);
-		XBee_Transmit(&data);
+		xbee_packet.command = ReceiveFile;
+		xbee_packet.target = target;
+		*((FSIZE_t *) xbee_packet.data) = fsize;
+		strcpy((char *) &xbee_packet.data[sizeof(FSIZE_t)], path);
+		XBee_Transmit(&xbee_packet);
 		transmitting_file = 1;
-		return ret;
+	} else {
+		printf("Already transmitting file\r\n");
 	}
-	printf("Already transmitting file\n");
-	return -1;
 }
 
 void XBee_Transmit_File() {
-	printf("Transmitting file\n");
+	printf("Transmitting file\r\n");
 	HAL_UART_Transmit_DMA(XBEE_UART, file_buf, fsize);
 	transmitting_file = 2;
 }
@@ -155,136 +85,117 @@ void XBee_Receive_File() {
 		if (!is_receive_target) {
 			printf(" but not target of file transfer");
 		}
-		printf("\n");
+		printf("\r\n");
 		file_buf = (uint8_t *) malloc(rsize);
 		HAL_UART_Receive_DMA(XBEE_UART, file_buf, rsize);
 		receiving_file = 1;
 	} else {
-		printf("Already receiving file\n");
+		printf("Already receiving file\r\n");
 	}
 }
 
 void XBee_Resolve() {
+	is_receive_target = XBee_Received.target == 0 || XBee_Received.target == UID;
 	if (XBee_Received.command == ReceiveFile) {
-		printf("Preparing to receive file\n");
+		printf("Preparing to receive file\r\n");
 		rsize = *((FSIZE_t *) XBee_Received.data);
 		strcpy(rpath, (TCHAR *) &XBee_Received.data[sizeof(FSIZE_t)]);
-		is_receive_target = XBee_Received.target == 0 || XBee_Received.target == UID;
 		XBee_Receive_File();
-	} else if (XBee_Received.target == 0 || XBee_Received.target == UID) {
+	} else if (is_receive_target) {
 		switch (XBee_Received.command) {
-		case PrintMessage:
-			printf("%s\n", (char *) XBee_Received.data);
-			break;
-		case Register:
-			if (num_registered_devices >= MAX_DEVICES) {
-				printf("Maximum registered network devices reached\n");
+			case PrintMessage:
+				printf("%s\r\n", (char *) XBee_Received.data);
 				break;
-			}
-			uint32_t uid = *((uint32_t *) XBee_Received.data);
-			strcpy(rpath, (char *) &XBee_Received.data[sizeof(uint32_t)]);
-			int res = add_update_device(uid, rpath);
-
-			int request_audio = 0;
-
-			if (res == 0) {
-				printf("Registered new device with UID %u! Requesting...\r\n", (unsigned int) uid);
-				request_audio = 1;
-			} else if (res == 1) {
-				printf("New file detected for device %u! Requesting... \r\n", (uint) uid);
-				request_audio = 1;
-			} else if (res == 2) {
-				printf("Device %u already registered. Audio file up to date. \r\n", (uint) uid);
-			}
-
-			if (request_audio) {
-				XBee_Data data;
-				data.command = RequestAudio;
-				data.target = uid;
-				XBee_Transmit(&data);
-			}
-
-			break;
-		case RequestDevices:
-			printf("Sending device files\r\n");
-			const TCHAR path[MAX_PATH_LENGTH];
-			for (int i = 0; i < num_registered_devices; i++) {
-				sprintf((char *) path, "/audio/%u.wav", (unsigned int) devices[i]);
-				XBee_Transmit_File_Start(path, XBee_Received.source);
-				while (transmitting_file);
-			}
-			printf("Sending device list\r\n");
-			xbee_packet.command = ReceiveDevices;
-			xbee_packet.source = UID;
-			xbee_packet.target = XBee_Received.source;
-			*((int *) xbee_packet.data) = num_registered_devices;
-			for (int i = 0; i < num_registered_devices; i++) {
-				*((uint32_t *) &xbee_packet.data[sizeof(int) + i * sizeof(uint32_t)]) = devices[i];
-			}
-			XBee_Transmit(&xbee_packet);
-			break;
-		case ImpactEventAnnounce:
-			xbee_packet.command = ImpactEventRelay;
-			xbee_packet.source = UID;
-			xbee_packet.target = 0;
-			memcpy(xbee_packet.data, &XBee_Received.source, sizeof(uint32_t));
-			XBee_Transmit(&xbee_packet);
-			break;
-
-		case HelpEventAnnounce:
-			xbee_packet.command = HelpEventRelay;
-			xbee_packet.source = UID;
-			xbee_packet.target = 0;
-			memcpy(xbee_packet.data, &XBee_Received.source, sizeof(uint32_t));
-			XBee_Transmit(&xbee_packet);
-			break;
-		default:
-			printf("Incorrect command send to base station\r\n");
+			case ImpactEvent:
+				printf("Impact detected on device %u\r\n", (unsigned int) XBee_Received.source);
+				break;
+			case HelpEvent:
+				printf("Help requested by device %u\r\n", (unsigned int) XBee_Received.source);
+				break;
+			case Register:
+				if (num_registered_devices >= MAX_DEVICES) {
+					printf("Maximum registered network devices reached\r\n");
+					break;
+				}
+				for (int i = 0; i < num_registered_devices; i++) {
+					if (devices[i] == XBee_Received.source) {
+						printf("Already registered device %u\r\n", (unsigned int) XBee_Received.source);
+						goto done;
+					}
+				}
+				devices[num_registered_devices] = XBee_Received.source;
+				printf("Registered new device with UID %u\r\n", (unsigned int) devices[num_registered_devices]);
+				num_registered_devices++;
+			done:
+				break;
+			case RequestDevices:
+				printf("Sending device files\r\n");
+				const TCHAR path[MAX_PATH_LENGTH];
+				for (int i = 0; i < num_registered_devices; i++) {
+					if (devices[i] != XBee_Received.source) {
+						sprintf((char *) path, "/audio/%u.wav", (unsigned int) devices[i]);
+						XBee_Transmit_File_Start(path, XBee_Received.source);
+						while (transmitting_file);
+						HAL_Delay(MIN_TRANSMIT_PERIOD);
+					}
+				}
+				printf("Sending device list\r\n");
+				xbee_packet.command = SendDevices;
+				xbee_packet.source = UID;
+				xbee_packet.target = XBee_Received.source;
+				int found = 0;
+				for (int i = 0; i < num_registered_devices; i++) {
+					if (devices[i] == XBee_Received.source) {
+						found = 1;
+					} else {
+						*((uint32_t *) &xbee_packet.data[sizeof(int) + i * sizeof(uint32_t)] + found) = devices[i];
+					}
+				}
+				*((int *) xbee_packet.data) = num_registered_devices - found;
+				XBee_Transmit(&xbee_packet);
+				break;
+			default:
+				printf("Incorrect command sent to base station\r\n");
 		}
-		if (!receiving_file) {
-			XBee_Receive(&XBee_Received);
-		}
+	}
+	if (!receiving_file) {
+		XBee_Receive(&XBee_Received);
 	}
 }
 
-int XBee_Resolve_File() {
+void XBee_Resolve_File() {
 	int ret = 0;
 	if (!is_receive_target) {
-		printf("Received file but not target of file transfer\n");
+		printf("Received file but not target of file transfer\r\n");
 	} else {
 		ret = f_open(&fil, rpath, FA_OPEN_ALWAYS | FA_WRITE);
 		if(ret != FR_OK) {
-			printf("Failed to open file (%i) \r\n", ret);
-			return -1;
+			printf("Failed to open file (%i)\r\n", ret);
 		}
-		UINT bytes_written;
-		ret = f_write(&fil, file_buf, rsize, &bytes_written);
+		ret = f_write(&fil, file_buf, rsize, &bw);
 		if(ret != FR_OK) {
-			printf("Failed to write file (%i) \r\n", ret);
-			return -1;
+			printf("Failed to write file (%i)\r\n", ret);
 		}
 		ret = f_close(&fil);
 		if(ret != FR_OK) {
-			printf("Failed to close file (%i) \r\n", ret);
-			return -1;
+			printf("Failed to close file (%i)\r\n", ret);
 		}
-		printf("Received file\n");
+		printf("Received file\r\n");
 	}
 	free(file_buf);
 	receiving_file = 0;
 	XBee_Receive(&XBee_Received);
-	return ret;
 }
 
 void XBee_Handshake() {
-	printf("Requesting devices\n");
+	printf("Requesting devices\r\n");
 	xbee_packet.command = RequestDevices;
 	xbee_packet.source = UID;
 	xbee_packet.target = MASTER_UID;
 	XBee_Transmit(&xbee_packet);
 	receiving_devices = 1;
 	while (receiving_devices);
-	printf("Broadcasting identity\n");
+	printf("Broadcasting identity\r\n");
 	xbee_packet.command = Register;
 	xbee_packet.target = 0;
 	*((uint32_t *) xbee_packet.data) = UID;
@@ -292,24 +203,21 @@ void XBee_Handshake() {
 //	const TCHAR path[MAX_PATH_LENGTH];
 //	strcpy((char *) path, (char *) &xbee_packet.data[sizeof(uint32_t)]);
 //	HAL_Delay(500);
-//	printf("Transmitting file\n");
+//	printf("Transmitting file\r\n");
 //	XBee_Transmit_File_Start(path, 0);
 //	while (transmitting_file);
 }
 
 void XBee_Init() {
-//	add_update_device(123456, "/COOL_NAME.WAV");
-	load_known_devices();
-
 	UID = HAL_GetUIDw0() + HAL_GetUIDw1() + HAL_GetUIDw2();
-	printf("UID: %u\n", (unsigned int) UID);
+	printf("UID: %u\r\n", (unsigned int) UID);
 	__HAL_TIM_SET_AUTORELOAD(FILE_TIMER, 5000);
 	XBee_Receive(&XBee_Received);
 }
 
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
 	if (huart == XBEE_UART) {
-		printf("XBee Error\n");
+		printf("XBee Error\r\n");
 	}
 }
 
@@ -320,7 +228,7 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
 			FIX_TIMER_TRIGGER(FILE_TIMER);
 			HAL_TIM_Base_Start_IT(FILE_TIMER);
 		} else if (transmitting_file == 2) {
-			printf("Transmitted file\n");
+			printf("Transmitted file\r\n");
 			free(file_buf);
 			transmitting_file = 0;
 		}
@@ -329,7 +237,7 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 	if (huart == XBEE_UART) {
-//		printf("Received - Type: %i, Target: %u, Data: [%u, %u, %u, ...]\n",
+//		printf("Received - Type: %i, Target: %u, Data: [%u, %u, %u, ...]\r\n",
 //				XBee_Received.command, (unsigned int) XBee_Received.target,
 //				XBee_Received.data[0], XBee_Received.data[1],
 //				XBee_Received.data[2]);

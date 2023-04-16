@@ -111,8 +111,6 @@ enum CameraState camera_state = CAMERA_IDLE;
 
 // xbee
 uint32_t devices[MAX_DEVICES];
-char name_audio_paths[MAX_DEVICES][MAX_PATH_LENGTH];
-size_t name_audio_path_lengths[MAX_DEVICES];
 
 XBee_Data xbee_packet;
 int num_registered_devices = 0;
@@ -345,10 +343,6 @@ int main(void)
 	
 	/* INITIALIZATION + TESTS END */
 	init_complete = 1;
-
-	for (int i = 0; i < num_registered_devices; ++i) {
-		printf("%lu %u %s\r\n", devices[i], name_audio_path_lengths[i], name_audio_paths[i]);
-	}
 
   /* USER CODE END 2 */
 
@@ -944,7 +938,7 @@ static void MX_DMA_Init(void)
   HAL_NVIC_SetPriority(DMA2_Stream0_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA2_Stream0_IRQn);
   /* DMA2_Stream2_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Stream2_IRQn, 1, 0);
+  HAL_NVIC_SetPriority(DMA2_Stream2_IRQn, 2, 0);
   HAL_NVIC_EnableIRQ(DMA2_Stream2_IRQn);
   /* DMA2_Stream7_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA2_Stream7_IRQn, 1, 0);
