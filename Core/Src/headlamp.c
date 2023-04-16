@@ -14,11 +14,11 @@ void toggle_headlamp() {
 				GPIO_PIN_RESET);
 		if (headlamp_on) {
 			__HAL_TIM_SET_AUTORELOAD(HEADLAMP_TIMER, 10000);
-			printf("Light off\n");
+			printf("Light off\r\n");
 			headlamp_on = 0;
 		} else {
 			__HAL_TIM_SET_AUTORELOAD(HEADLAMP_TIMER, 2500);
-			printf("Light on\n");
+			printf("Light on\r\n");
 			headlamp_on = 1;
 		}
 		HAL_TIM_Base_Start_IT(HEADLAMP_TIMER);

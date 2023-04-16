@@ -97,7 +97,7 @@ void buttons_init(Buttons* btns) {
 	write(btns, MPR121_ECR, ECR_SETTING); // start with above ECR setting
 
 	if (!btns->status) {
-		//printf("Capacitive touch init failed!\n\r");
+		printf("Capacitive touch init failed!\r\n");
 	}
 }
 

@@ -8,15 +8,11 @@
 #define MIN_TRANSMIT_PERIOD 100
 #define MAX_PATH_LENGTH 50
 
-#define MY_FILE_PATH "/AUDIO/JOSEPH_MAFFETONE.WAV"
-
 typedef enum {
-	PrintMessage, ReceiveFile, // universal
-	Register, RequestDevices, ImpactEventAnnounce, HelpEventAnnounce, // only handled by base station (only sent by helmets)
-	RequestAudio, ReceiveDevices, ImpactEventRelay, HelpEventRelay // only handled by helmets (only sent by base station)
+	PrintMessage, ReceiveFile, ImpactEvent, HelpEvent, Register, // universal
+	RequestDevices, // only handled by base station (only sent by helmets)
+	SendDevices, // only handled by helmets (only sent by base station)
 } XBee_Command;
-
-
 
 typedef struct {
 	XBee_Command command;
@@ -32,7 +28,7 @@ typedef struct {
 
 
 void XBee_Transmit(XBee_Data *data);
-int XBee_Transmit_File_Start(const TCHAR *path, uint32_t target);
+void XBee_Transmit_File_Start(const TCHAR *path, uint32_t target);
 void XBee_Transmit_File();
 void XBee_Broadcast_Identity();
 void XBee_Init();
@@ -44,6 +40,6 @@ extern TIM_HandleTypeDef htim11;
 #define XBEE_UART &huart1
 #define FILE_TIMER &htim11
 
-#define MASTER_UID 1234567890
+#define MASTER_UID 1689684118
 
 #endif
