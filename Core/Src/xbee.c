@@ -24,7 +24,6 @@ volatile int receiving_file;
 volatile int receiving_devices;
 int is_receive_target = 0;
 
-
 uint8_t *file_buf;
 FSIZE_t fsize;
 FSIZE_t rsize;

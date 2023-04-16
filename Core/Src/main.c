@@ -94,7 +94,6 @@ FATFS fs;
 FATFS * pfs;
 FIL fil; // belongs to camera
 FIL audio_fil;
-FIL audio_fil;
 FRESULT fres;
 DWORD fre_clust;
 uint32_t total_space, free_space;
@@ -379,7 +378,7 @@ int main(void)
 	FIX_TIMER_TRIGGER(&htim9);
 
 	HAL_TIM_Base_Start_IT(&htim2);
-	HAL_TIM_Base_Start_IT(&htim9);
+	//HAL_TIM_Base_Start_IT(&htim9);
 	//HAPTICS_INIT();
 
 	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
@@ -390,6 +389,7 @@ int main(void)
 	ov5462.hspi = &CAMERA_SPI;
 
 	printf("program start!\r\n");
+	play_wav(&audio, "/AUDIO/init.wav");
 
 
 //	/* INITIALIZATION + TESTS BEGIN */
@@ -442,6 +442,7 @@ int main(void)
 	XBee_Init();
 	XBee_Handshake();
 
+
 	// audio struct initialize
 	ext_dac.cs_port = GPIOD;
 	ext_dac.cs_pin = GPIO_PIN_2;
@@ -471,7 +472,7 @@ int main(void)
 	enum CameraState camera_state = CAMERA_CHECK;
 	TIM2->CNT = 0;
 #endif
-	play_wav(&audio, "/AUDIO/init.wav");
+
 	init_complete = 1;
 
   /* USER CODE END 2 */
@@ -486,7 +487,7 @@ int main(void)
 		PWM_SET_RIGHT(get_motor_value(&distance_sensor_array, RIGHT_SENSOR));
 
 
-		imu_update(&imu);
+		//imu_update(&imu);
 
 		check_and_fill_audio_buf(&audio);
 
@@ -516,7 +517,7 @@ int main(void)
 		if (alert_flag) {
 			clear_queue(&audio);
 			play_wav(&audio, "/audio/important_chime.wav");
-			sprintf(victim_filepath, "%u.wav", (uint) victim_uid);
+			sprintf(victim_filepath, "/audio/%u.wav", (uint) victim_uid);
 			play_wav(&audio, victim_filepath);
 
 			if (alert_flag == HELP_ALERT) {

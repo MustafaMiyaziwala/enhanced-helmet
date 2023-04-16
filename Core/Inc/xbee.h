@@ -21,7 +21,7 @@ typedef struct {
 	XBee_Command command;
 	uint32_t source;
 	uint32_t target;
-	uint8_t data[100];
+	uint8_t data[64];
 } XBee_Data;
 
 typedef struct {
