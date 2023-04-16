@@ -1,0 +1,17 @@
+Isaac:
+Finish power
+
+Mustafa:
+Finish power and touch signaling
+Test touch pad
+Software integration
+
+Joseph:
+Xbee status on perfboard
+Software integration
+
+
+Goal:
+Finish touchpad interface
+Finish construction
+Video saving/voice prompts/and xbee transmission on impact event or touchpad request
