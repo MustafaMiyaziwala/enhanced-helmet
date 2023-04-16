@@ -365,6 +365,9 @@ int main(void)
   MX_TIM11_Init();
   MX_TIM9_Init();
   /* USER CODE BEGIN 2 */
+
+
+
 	FIX_TIMER_TRIGGER(&htim2);
 	FIX_TIMER_TRIGGER(&htim3);
 	FIX_TIMER_TRIGGER(&htim4);
@@ -373,7 +376,7 @@ int main(void)
 
 	HAL_TIM_Base_Start_IT(&htim2);
 	HAL_TIM_Base_Start_IT(&htim9);
-	HAPTICS_INIT();
+	//HAPTICS_INIT();
 
 	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
 	uint8_t buf[1] = { 0x00 }; // dummy write
@@ -433,8 +436,8 @@ int main(void)
 //	// TODO: XBee init, connect to network, broadcast name file
 	//XBee_Init();
 	//XBee_Handshake();
-	//Headlamp_Init();
-	//PWM_RESET_IGNORE();
+	Headlamp_Init();
+	PWM_RESET_IGNORE();
 
 
 
@@ -460,14 +463,9 @@ int main(void)
 	imu.hi2c = &hi2c1;
 	imu_init(&imu);
 
-	//distance_sensor_array.hadc = &hadc1;
-	//distance_sensor_array.buf_pos = 0;
+	distance_sensor_array.hadc = &hadc1;
 
 
-
-
-	//play_wav(&audio, "/save_video.wav");
-	//play_wav(&audio, "/song.wav");
 
 
 	
@@ -478,7 +476,7 @@ int main(void)
 	enum CameraState camera_state = CAMERA_CHECK;
 	TIM2->CNT = 0;
 #endif
-	play_wav(&audio, "/audio/init.wav");
+	play_wav(&audio, "/AUDIO/init.wav");
 	init_complete = 1;
 
   /* USER CODE END 2 */
@@ -516,7 +514,7 @@ int main(void)
 		//imu_update(&imu);
 		//printf("%d\t%d\t%d\n\r", imu.x_accel, imu.y_accel, imu.z_accel);
 		
-
+		//printf("%lu\r\n", get_motor_value(&distance_sensor_array, LEFT_SENSOR));
 		/* AUDIO BUFFER LOAD */
 		check_and_fill_audio_buf(&audio);
 		//write_to_dac(&ext_dac, 127);
@@ -701,7 +699,7 @@ static void MX_ADC1_Init(void)
   hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV8;
   hadc1.Init.Resolution = ADC_RESOLUTION_12B;
   hadc1.Init.ScanConvMode = ENABLE;
-  hadc1.Init.ContinuousConvMode = DISABLE;
+  hadc1.Init.ContinuousConvMode = ENABLE;
   hadc1.Init.DiscontinuousConvMode = DISABLE;
   hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
   hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
@@ -1072,7 +1070,7 @@ static void MX_TIM9_Init(void)
   htim9.Instance = TIM9;
   htim9.Init.Prescaler = 8399;
   htim9.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim9.Init.Period = 2500;
+  htim9.Init.Period = 65535;
   htim9.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim9.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim9) != HAL_OK)
