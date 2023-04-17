@@ -13,8 +13,10 @@ extern int num_registered_devices;
 extern XBee_Data xbee_packet;
 
 uint32_t UID;
-XBee_Data XBee_Received;
+extern XBee_Data XBee_Received;
 uint32_t last_transmit = 0;
+extern uint8_t tr;
+extern uint32_t from_UID;
 
 volatile int transmitting_file = 0;
 volatile int receiving_devices = 0;
@@ -88,6 +90,9 @@ void XBee_Receive_File() {
 		printf("\r\n");
 		file_buf = (uint8_t *) malloc(rsize);
 		HAL_UART_Receive_DMA(XBEE_UART, file_buf, rsize);
+		__HAL_TIM_SET_AUTORELOAD(FILE_TIMER, 1000);
+		tr = 0;
+		HAL_TIM_Base_Start_IT(FILE_TIMER);
 		receiving_file = 1;
 	} else {
 		printf("Already receiving file\r\n");
@@ -100,6 +105,7 @@ void XBee_Resolve() {
 		printf("Preparing to receive file\r\n");
 		rsize = *((FSIZE_t *) XBee_Received.data);
 		strcpy(rpath, (TCHAR *) &XBee_Received.data[sizeof(FSIZE_t)]);
+		from_UID = XBee_Received.source;
 		XBee_Receive_File();
 	} else if (is_receive_target) {
 		switch (XBee_Received.command) {
@@ -211,7 +217,6 @@ void XBee_Handshake() {
 void XBee_Init() {
 	UID = HAL_GetUIDw0() + HAL_GetUIDw1() + HAL_GetUIDw2();
 	printf("UID: %u\r\n", (unsigned int) UID);
-	__HAL_TIM_SET_AUTORELOAD(FILE_TIMER, 5000);
 	XBee_Receive(&XBee_Received);
 }
 
@@ -225,7 +230,8 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
 	if (huart == XBEE_UART) {
 		if (transmitting_file == 1) {
 			while (HAL_TIM_Base_GetState(FILE_TIMER) != HAL_TIM_STATE_READY);
-			FIX_TIMER_TRIGGER(FILE_TIMER);
+			__HAL_TIM_SET_AUTORELOAD(FILE_TIMER, 1000);
+			tr = 0;
 			HAL_TIM_Base_Start_IT(FILE_TIMER);
 		} else if (transmitting_file == 2) {
 			printf("Transmitted file\r\n");

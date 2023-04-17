@@ -8,11 +8,12 @@
 #define MIN_TRANSMIT_PERIOD 100
 #define MAX_PATH_LENGTH 50
 #define MAX_DEVICES 4
+#define HANDSHAKE_TIMEOUT 10000
 
 typedef enum {
 	PrintMessage, ReceiveFile, ImpactEvent, HelpEvent, Register, // universal
 	RequestDevices, // only handled by base station (only sent by helmets)
-	SendDevices, // only handled by helmets (only sent by base station)
+	SendDevices, PlayWelcome, ResendFile, // only handled by helmets (only sent by base station)
 } XBee_Command;
 
 typedef struct {
@@ -25,6 +26,7 @@ typedef struct {
 void XBee_Transmit(XBee_Data *data);
 void XBee_Transmit_File_Start(const TCHAR *path, uint32_t target);
 void XBee_Transmit_File();
+void XBee_Receive();
 void XBee_Handshake();
 void XBee_Init();
 
