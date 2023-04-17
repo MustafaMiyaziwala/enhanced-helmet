@@ -53,8 +53,10 @@
 #define HELP_EVENT 2
 #define IMPACT_EVENT 1
 
+#define DEBOUNCE_DELAY 200
 
-#define camera
+
+//#define camera
 #define sd
 
 /* USER CODE END PD */
@@ -145,6 +147,8 @@ FRESULT fr;
 
 uint8_t ULTRASONIC_IGNORE = 1;
 uint8_t pulsing = 0;
+
+uint32_t last_press = 0;
 
 /* USER CODE END PV */
 
@@ -280,88 +284,115 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim) {
 }
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
-	// TODO: remove, this is just for testing
-	if (GPIO_Pin == 0x2000) {
-//		printf("Save requested\r\n");
-//		save_requested = 1;
-	} else if (GPIO_Pin & (1 << 7)) { // Buttons interrupt
-		uint8_t btn = get_released_button(&btns);
-
-		if (btn != NO_BTN && countdown_flag) {
+	if (last_press == 0 || HAL_GetTick() - last_press > DEBOUNCE_DELAY) {
+		if (countdown_flag) {
+			printf("Canceling request\r\n");
 			clear_queue(&audio);
 			if (countdown_flag == HELP_EVENT) {
 				play_wav(&audio, "/audio/cancel_request.wav");
 			} else {
 				play_wav(&audio, "/audio/cancel_alert.wav");
 			}
-
 			countdown_flag = 0;
-			if (btn == HELP_BTN || btn == RECORD_BTN) {
-				PWM_PULSE_RIGHT();
-			} else {
-				PWM_PULSE_LEFT();
-			}
-		} else if (!is_playing(&audio)) {
-
-		switch (btn) {
-			case HELP_BTN:
-				printf("Help\r\n");
+		} else {
+			if (GPIO_Pin & (1 << 13)) { // Blue button interrupt
+				printf("Saying hi\r\n");
+				xbee_packet.command = PrintMessage;
+				xbee_packet.target = 0;
+				sprintf((char *) xbee_packet.data, "Hello from device %u!", (uint) UID);
+				XBee_Transmit(&xbee_packet);
+			} else if (GPIO_Pin & (1 << 14)) { // Yellow button interrupt
+				printf("Emitting help request after countdown\r\n");
 				play_wav(&audio, "/audio/siren.wav"); // possibly change chime
 				play_wav(&audio, "/audio/help_siren.wav");
 				countdown_flag = HELP_EVENT;
-				PWM_PULSE_RIGHT();
-				break;
-
-			case RECORD_BTN:
-				printf("Record\r\n");
-				play_wav(&audio, "/audio/video_chime.wav");
-				play_wav(&audio, "/audio/save_video.wav");
-				if (!save_requested) {
-					save_requested = 1;
-				} else {
-					play_wav(&audio, "/audio/error.wav");
-				}
-				// TODO: Set camera state machine
-				PWM_PULSE_RIGHT();
-				break;
-
-			case HAPTICS_BTN:
-				if(ULTRASONIC_IGNORE) {
-					printf("Enabling Haptics\r\n");
-					//play_wav(&audio, "/audio/siren.wav");
-					play_wav(&audio, "/audio/enable_haptics.wav");
-
-					PWM_RESET_IGNORE();
-				} else {
-					printf("Disabling Haptics\r\n");
-					//play_wav(&audio, "/audio/video_chime.wav");
-					play_wav(&audio, "/audio/disable_haptics.wav");
-					PWM_SET_IGNORE();
-				}
-				PWM_PULSE_LEFT();
-				break;
-
-			case LIGHT_BTN:
-				printf("Lights\r\n");
-				toggle_headlamp();
-				PWM_PULSE_LEFT();
-				break;
-
-			default:
-				printf("None\r\n");
-				break;
-
+			} else if (GPIO_Pin & (1 << 15)) { // Orange button interrupt
+				printf("Emitting impact event after countdown\r\n");
+				play_wav(&audio, "/audio/siren.wav");
+				play_wav(&audio, "/audio/impact_siren.wav");
+				countdown_flag = IMPACT_EVENT;
 			}
 		}
-
-
-	} else if (GPIO_Pin & (1 << 9)) { // IMU collision interrupt
-		printf("Impact detected\r\n");
-		imu_clear_int1(&imu);
-		play_wav(&audio, "/audio/siren.wav");
-		play_wav(&audio, "/audio/impact_siren.wav");
-		countdown_flag = IMPACT_EVENT;
+		last_press = HAL_GetTick();
 	}
+//	} else if (GPIO_Pin & (1 << 7)) { // Buttons interrupt
+//		uint8_t btn = get_released_button(&btns);
+//
+//		if (btn != NO_BTN && countdown_flag) {
+//			clear_queue(&audio);
+//			if (countdown_flag == HELP_EVENT) {
+//				play_wav(&audio, "/audio/cancel_request.wav");
+//			} else {
+//				play_wav(&audio, "/audio/cancel_alert.wav");
+//			}
+//
+//			countdown_flag = 0;
+//			if (btn == HELP_BTN || btn == RECORD_BTN) {
+//				PWM_PULSE_RIGHT();
+//			} else {
+//				PWM_PULSE_LEFT();
+//			}
+//		} else if (!is_playing(&audio)) {
+//
+//		switch (btn) {
+//			case HELP_BTN:
+//				printf("Help\r\n");
+//				play_wav(&audio, "/audio/siren.wav"); // possibly change chime
+//				play_wav(&audio, "/audio/help_siren.wav");
+//				countdown_flag = HELP_EVENT;
+//				PWM_PULSE_RIGHT();
+//				break;
+//
+//			case RECORD_BTN:
+//				printf("Record\r\n");
+//				play_wav(&audio, "/audio/video_chime.wav");
+//				play_wav(&audio, "/audio/save_video.wav");
+//				if (!save_requested) {
+//					save_requested = 1;
+//				} else {
+//					play_wav(&audio, "/audio/error.wav");
+//				}
+//				// TODO: Set camera state machine
+//				PWM_PULSE_RIGHT();
+//				break;
+//
+//			case HAPTICS_BTN:
+//				if(ULTRASONIC_IGNORE) {
+//					printf("Enabling Haptics\r\n");
+//					//play_wav(&audio, "/audio/siren.wav");
+//					play_wav(&audio, "/audio/enable_haptics.wav");
+//
+//					PWM_RESET_IGNORE();
+//				} else {
+//					printf("Disabling Haptics\r\n");
+//					//play_wav(&audio, "/audio/video_chime.wav");
+//					play_wav(&audio, "/audio/disable_haptics.wav");
+//					PWM_SET_IGNORE();
+//				}
+//				PWM_PULSE_LEFT();
+//				break;
+//
+//			case LIGHT_BTN:
+//				printf("Lights\r\n");
+//				toggle_headlamp();
+//				PWM_PULSE_LEFT();
+//				break;
+//
+//			default:
+//				printf("None\r\n");
+//				break;
+//
+//			}
+//		}
+//
+//
+//	} else if (GPIO_Pin & (1 << 9)) { // IMU collision interrupt
+//		printf("Impact detected\r\n");
+//		imu_clear_int1(&imu);
+//		play_wav(&audio, "/audio/siren.wav");
+//		play_wav(&audio, "/audio/impact_siren.wav");
+//		countdown_flag = IMPACT_EVENT;
+//	}
 }
 
 
@@ -446,7 +477,7 @@ int main(void)
   /* USER CODE BEGIN 2 */
 //  SCB->VTOR = FLASH_BASE;
 //  __set_BASEPRI(0);
-  HAL_NVIC_DisableIRQ(TIM4_IRQn);
+//  HAL_NVIC_DisableIRQ(TIM4_IRQn);
 	Headlamp_Init();
 
 
@@ -520,7 +551,7 @@ int main(void)
 	PWM_RESET_IGNORE();
 	
 	XBee_Init();
-//	XBee_Handshake();
+	XBee_Handshake();
 
 
 	// audio struct initialize
@@ -592,7 +623,7 @@ int main(void)
 				xbee_packet.command = ImpactEvent;
 			}
 
-//			XBee_Transmit(&xbee_packet);
+			XBee_Transmit(&xbee_packet);
 			save_requested = 1;
 
 			event_flag = 0;
@@ -1402,11 +1433,11 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(DAC_CS_GPIO_Port, DAC_CS_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin : B1_Pin */
-  GPIO_InitStruct.Pin = B1_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  /*Configure GPIO pins : B1_Pin IMU_INT_Pin */
+  GPIO_InitStruct.Pin = B1_Pin|IMU_INT_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pin : HEADLAMP_OUT_Pin */
   GPIO_InitStruct.Pin = HEADLAMP_OUT_Pin;
@@ -1436,11 +1467,11 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : IMU_INT_Pin */
-  GPIO_InitStruct.Pin = IMU_INT_Pin;
+  /*Configure GPIO pins : PB14 PB15 */
+  GPIO_InitStruct.Pin = GPIO_PIN_14|GPIO_PIN_15;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(IMU_INT_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pin : DAC_CS_Pin */
   GPIO_InitStruct.Pin = DAC_CS_Pin;
