@@ -18,10 +18,10 @@ extern uint8_t welcome_flag;
 extern uint32_t UID;
 extern XBee_Data XBee_Received;
 uint32_t last_transmit = 0;
-extern uint8_t tr;
+extern volatile uint8_t tr;
 
 volatile int transmitting_file;
-volatile int receiving_file;
+extern volatile int receiving_file;
 volatile int receiving_devices;
 int is_receive_target = 0;
 
@@ -87,6 +87,8 @@ void XBee_Receive_File() {
 		printf("Receiving file\r\n");
 		file_buf = (uint8_t *) malloc(rsize);
 		HAL_UART_Receive_DMA(XBEE_UART, file_buf, rsize);
+		HAL_TIM_Base_Stop_IT(FILE_TIMER);
+		(FILE_TIMER)->Instance->CNT = 0;
 		__HAL_TIM_SET_AUTORELOAD(FILE_TIMER, FILE_TIMEOUT * 2);
 		tr = 1;
 		HAL_TIM_Base_Start_IT(FILE_TIMER);
@@ -101,7 +103,6 @@ void XBee_Broadcast_File() {
 	const TCHAR path[MAX_PATH_LENGTH];
 	sprintf((char *) path, "/audio/%u.wav", (unsigned int) UID);
 	XBee_Transmit_File_Start(path, 0);
-	while (transmitting_file);
 }
 
 void XBee_Resolve() {
@@ -201,16 +202,14 @@ void XBee_Handshake() {
 	xbee_packet.command = RequestDevices;
 	xbee_packet.target = MASTER_UID;
 	receiving_devices = 1;
-	int received_devices = 0;
-	while (!received_devices) {
+	while (receiving_devices) {
 		XBee_Transmit(&xbee_packet);
 		uint32_t time = HAL_GetTick();
 		while (receiving_devices && ((HAL_GetTick() - time) < HANDSHAKE_TIMEOUT));
-		if (!receiving_devices) {
-			received_devices = 1;
-		} else {
+		if (receiving_devices) {
 			printf("Retrying...\r\n");
 			 HAL_UART_DMAStop(XBEE_UART);
+			 HAL_Delay(500);
 			 XBee_Receive(&XBee_Received);
 		}
 	}
@@ -238,7 +237,8 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
 	if (huart == XBEE_UART) {
 		if (transmitting_file == 1) {
-			while (HAL_TIM_Base_GetState(FILE_TIMER) != HAL_TIM_STATE_READY);
+			HAL_TIM_Base_Stop_IT(FILE_TIMER);
+			(FILE_TIMER)->Instance->CNT = 0;
 			__HAL_TIM_SET_AUTORELOAD(FILE_TIMER, 1000);
 			tr = 0;
 			HAL_TIM_Base_Start_IT(FILE_TIMER);

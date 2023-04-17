@@ -132,7 +132,9 @@ XBee_Data xbee_packet;
 XBee_Data XBee_Received;
 uint32_t UID;
 uint32_t victim_uid = 0;
-uint8_t tr;
+volatile uint8_t tr;
+volatile int receiving_file;
+extern uint8_t *file_buf;
 
 // camera
 uint8_t curr_camera_byte=0;
@@ -250,18 +252,22 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim) {
 	} else if (htim == &CAMERA_CAPTURE_TIMER) {
 		capture_flag = 1;
 	} else if (htim == HEADLAMP_TIMER) {
-		HAL_GPIO_WritePin(HEADLAMP_OUT_GPIO_Port, HEADLAMP_OUT_Pin, GPIO_PIN_SET);
 		HAL_TIM_Base_Stop_IT(HEADLAMP_TIMER);
+		HAL_GPIO_WritePin(HEADLAMP_OUT_GPIO_Port, HEADLAMP_OUT_Pin, GPIO_PIN_SET);
 	} else if (htim == FILE_TIMER) {
-		if (tr) {
+		HAL_TIM_Base_Stop_IT(FILE_TIMER);
+		if (tr && receiving_file) {
 			printf("Receiving file timed out\r\n");
 			HAL_UART_DMAStop(XBEE_UART);
+			HAL_Delay(500);
+			free(file_buf);
+			receiving_file = 0;
 			XBee_Receive(&XBee_Received);
-		} else {
+		} else if (!tr) {
 			XBee_Transmit_File();
 		}
-		HAL_TIM_Base_Stop_IT(FILE_TIMER);
 	} else if (htim == PULSE_TIMER) {
+		HAL_TIM_Base_Stop_IT(PULSE_TIMER);
 		if (pulsing == 1) {
 			PWM_ADD(LEFT_PWM, -PULSE_VAL);
 		} else if (pulsing == 2) {
@@ -270,7 +276,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim) {
 			PWM_ADD(LEFT_PWM, -PULSE_VAL);
 			PWM_ADD(RIGHT_PWM, -PULSE_VAL);
 		}
-		HAL_TIM_Base_Stop_IT(PULSE_TIMER);
 	}
 }
 
@@ -1252,7 +1257,7 @@ static void MX_TIM11_Init(void)
 
   /* USER CODE END TIM11_Init 1 */
   htim11.Instance = TIM11;
-  htim11.Init.Prescaler = 8399;
+  htim11.Init.Prescaler = 42000 - 1;
   htim11.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim11.Init.Period = 65535;
   htim11.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
