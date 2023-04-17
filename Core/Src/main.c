@@ -79,6 +79,7 @@ SPI_HandleTypeDef hspi3;
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim4;
+TIM_HandleTypeDef htim5;
 TIM_HandleTypeDef htim9;
 TIM_HandleTypeDef htim10;
 TIM_HandleTypeDef htim11;
@@ -112,6 +113,7 @@ uint8_t event_flag = 0; // an impact has occurred, or help is requested
 uint8_t init_complete = 0;
 uint8_t countdown_flag = 0;
 uint8_t alert_flag = 0;
+uint8_t welcome_flag = 0;
 
 int capture_flag = 0;
 int save_requested = 0;
@@ -137,7 +139,8 @@ int camera_buf_idx = 0;
 uint8_t camera_buf[CHUNK_SIZE];
 int video_id = 0;
 
-uint8_t ULTRASONIC_IGNORE = 0;
+uint8_t ULTRASONIC_IGNORE = 1;
+uint8_t pulsing = 0;
 
 /* USER CODE END PV */
 
@@ -158,6 +161,7 @@ static void MX_TIM10_Init(void);
 static void MX_TIM4_Init(void);
 static void MX_TIM11_Init(void);
 static void MX_TIM9_Init(void);
+static void MX_TIM5_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -249,6 +253,16 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim) {
 	} else if (htim == FILE_TIMER) {
 		XBee_Transmit_File();
 		HAL_TIM_Base_Stop_IT(FILE_TIMER);
+	} else if (htim == PULSE_TIMER) {
+		if (pulsing == 1) {
+			PWM_ADD(LEFT_PWM, -PULSE_VAL);
+		} else if (pulsing == 2) {
+			PWM_ADD(RIGHT_PWM, -PULSE_VAL);
+		} else {
+			PWM_ADD(LEFT_PWM, -PULSE_VAL);
+			PWM_ADD(RIGHT_PWM, -PULSE_VAL);
+		}
+		HAL_TIM_Base_Stop_IT(PULSE_TIMER);
 	}
 }
 
@@ -269,6 +283,11 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 			}
 
 			countdown_flag = 0;
+			if (btn == HELP_BTN || btn == RECORD_BTN) {
+				PWM_PULSE_RIGHT();
+			} else {
+				PWM_PULSE_LEFT();
+			}
 		} else if (!is_playing(&audio)) {
 
 		switch (btn) {
@@ -277,14 +296,16 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 				play_wav(&audio, "/audio/siren.wav"); // possibly change chime
 				play_wav(&audio, "/audio/help_siren.wav");
 				countdown_flag = HELP_EVENT;
-
+				PWM_PULSE_RIGHT();
 				break;
 
 			case RECORD_BTN:
 				printf("Record\r\n");
-				play_wav(&audio, "/audio/video_chime.wav");
-				play_wav(&audio, "/audio/save_video.wav");
+				//welcome_flag = 1;
+				//play_wav(&audio, "/audio/video_chime.wav");
+				//play_wav(&audio, "/audio/save_video.wav");
 				// TODO: Set camera state machine
+				//PWM_PULSE_RIGHT();
 				break;
 
 			case HAPTICS_BTN:
@@ -298,11 +319,13 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 					play_wav(&audio, "/audio/disable_haptics.wav");
 					PWM_SET_IGNORE();
 				}
+				PWM_PULSE_LEFT();
 				break;
 
 			case LIGHT_BTN:
 				printf("Lights\r\n");
 				toggle_headlamp();
+				PWM_PULSE_LEFT();
 				break;
 
 			default:
@@ -320,6 +343,39 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 		play_wav(&audio, "/audio/impact_siren.wav");
 		countdown_flag = IMPACT_EVENT;
 	}
+}
+
+
+
+void play_welcome() {
+
+	if (welcome_flag == 2) {
+		if (is_playing(&audio) || audio.queue[audio.read_pos] != NULL ) {
+			return;
+		}
+		printf("Switching\r\n");
+		welcome_flag = 3;
+	}
+
+	if (welcome_flag == 1) {
+		play_wav(&audio, "/intro/intro_p1.wav");
+		++welcome_flag;
+		//welcome_flag = 0;
+		return;
+	}
+
+	if (welcome_flag == 3) {
+		welcome_flag = 0;
+	}
+
+
+	play_wav(&audio, "/intro/intro_p2.wav");
+	play_wav(&audio, "/intro/intro_p3.wav");
+	play_wav(&audio, "/intro/intro_p4.wav");
+	play_wav(&audio, "/intro/intro_p5.wav");
+	play_wav(&audio, "/intro/intro_p6.wav");
+
+
 }
 
 /* USER CODE END 0 */
@@ -367,19 +423,22 @@ int main(void)
   MX_TIM4_Init();
   MX_TIM11_Init();
   MX_TIM9_Init();
+  MX_TIM5_Init();
   /* USER CODE BEGIN 2 */
-
+	Headlamp_Init();
 
 
 	FIX_TIMER_TRIGGER(&htim2);
 	FIX_TIMER_TRIGGER(&htim3);
 	FIX_TIMER_TRIGGER(&htim4);
+	FIX_TIMER_TRIGGER(&htim5);
 	FIX_TIMER_TRIGGER(&htim10);
 	FIX_TIMER_TRIGGER(&htim9);
+	FIX_TIMER_TRIGGER(&htim11);
 
 	HAL_TIM_Base_Start_IT(&htim2);
 	//HAL_TIM_Base_Start_IT(&htim9);
-	//HAPTICS_INIT();
+	HAPTICS_INIT();
 
 	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
 	uint8_t buf[1] = { 0x00 }; // dummy write
@@ -389,7 +448,7 @@ int main(void)
 	ov5462.hspi = &CAMERA_SPI;
 
 	printf("program start!\r\n");
-	play_wav(&audio, "/AUDIO/init.wav");
+
 
 
 //	/* INITIALIZATION + TESTS BEGIN */
@@ -436,11 +495,10 @@ int main(void)
 
 	OV5462_continuous_capture_init(&ov5462);
 #endif
-	Headlamp_Init();
 	PWM_RESET_IGNORE();
 	
 	XBee_Init();
-	XBee_Handshake();
+	//XBee_Handshake();
 
 
 	// audio struct initialize
@@ -482,10 +540,14 @@ int main(void)
 	while (1)
 	{
 		/* UPDATES (ALWAYS RUN) */
-		PWM_SET_CENTER(get_motor_value(&distance_sensor_array, CENTER_SENSOR));
-		PWM_SET_LEFT(get_motor_value(&distance_sensor_array, LEFT_SENSOR));
-		PWM_SET_RIGHT(get_motor_value(&distance_sensor_array, RIGHT_SENSOR));
+//		PWM_SET_CENTER(get_motor_value(&distance_sensor_array, CENTER_SENSOR));
+//		PWM_SET_LEFT(get_motor_value(&distance_sensor_array, LEFT_SENSOR));
+//		PWM_SET_RIGHT(get_motor_value(&distance_sensor_array, RIGHT_SENSOR));
 
+		if (welcome_flag) {
+			printf("%d\r\n", welcome_flag);
+			play_welcome();
+		}
 
 		//imu_update(&imu);
 
@@ -1051,6 +1113,51 @@ static void MX_TIM4_Init(void)
   /* USER CODE BEGIN TIM4_Init 2 */
 
   /* USER CODE END TIM4_Init 2 */
+
+}
+
+/**
+  * @brief TIM5 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM5_Init(void)
+{
+
+  /* USER CODE BEGIN TIM5_Init 0 */
+
+  /* USER CODE END TIM5_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM5_Init 1 */
+
+  /* USER CODE END TIM5_Init 1 */
+  htim5.Instance = TIM5;
+  htim5.Init.Prescaler = 8400 - 1;
+  htim5.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim5.Init.Period = 1000 - 1;
+  htim5.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim5.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim5) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim5, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim5, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM5_Init 2 */
+
+  /* USER CODE END TIM5_Init 2 */
 
 }
 

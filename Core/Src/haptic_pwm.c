@@ -3,15 +3,13 @@
 #define FALSE  0 /* LOGICAL FALSE*/
 #define	TRUE   1 /* LOGICAL TRUE */
 
-#define CENTER_PWM TIM_CHANNEL_2
-#define LEFT_PWM   TIM_CHANNEL_1
-#define RIGHT_PWM  TIM_CHANNEL_3
-
 extern TIM_HandleTypeDef htim3;
 
 /* FLAG */
 /* Decides whether to ignore input */
 extern uint8_t ULTRASONIC_IGNORE;
+
+extern uint8_t pulsing;
 
 /* Y Intercept of linear */
 static uint16_t offset = 0; /* Offset to change base duty cycle of PWM */
@@ -47,6 +45,36 @@ uint8_t PWM_GET_OFFSET() {
 	return offset;
 }
 
+void PWM_ADD(uint32_t CHANNEL, int16_t val) {
+	if (val) {
+		int compareDelta = (val << 8);
+		uint16_t currCompare = __HAL_TIM_GetCompare(&htim3, CHANNEL);
+		__HAL_TIM_SetCompare(&htim3, CHANNEL, currCompare + compareDelta);
+	}
+}
+
+void PWM_PULSE_LEFT() {
+	PWM_ADD(LEFT_PWM, PULSE_VAL);
+	pulsing = 1;
+	TIM5->ARR = 1000;
+	HAL_TIM_Base_Start_IT(PULSE_TIMER);
+}
+
+void PWM_PULSE_RIGHT() {
+	PWM_ADD(RIGHT_PWM, PULSE_VAL);
+	pulsing = 2;
+	TIM5->ARR = 1000;
+	HAL_TIM_Base_Start_IT(PULSE_TIMER);
+}
+
+void PWM_PULSE_DEMO() {
+	PWM_ADD(LEFT_PWM, PULSE_VAL);
+	PWM_ADD(RIGHT_PWM, PULSE_VAL);
+	pulsing = 3;
+	TIM5->ARR = 5000;
+	HAL_TIM_Base_Start_IT(PULSE_TIMER);
+
+}
 
 void HAPTICS_INIT() {
 	HAL_TIM_PWM_Start(&htim3, CENTER_PWM);

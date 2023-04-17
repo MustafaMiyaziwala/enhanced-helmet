@@ -32,7 +32,21 @@ void PWM_SET_IGNORE();
 void PWM_RESET_IGNORE();
 void PWM_TOGGLE_IGNORE();
 
+void PWM_ADD(uint32_t CHANNEL, int16_t val);
+
+void PWM_PULSE_LEFT();
+void PWM_PULSE_RIGHT();
+void PWM_PULSE_DEMO();
+
 void HAPTICS_INIT();
 
+extern TIM_HandleTypeDef htim5;
+
+#define PULSE_TIMER &htim5
+#define PULSE_VAL 6
+
+#define CENTER_PWM TIM_CHANNEL_2
+#define LEFT_PWM   TIM_CHANNEL_1
+#define RIGHT_PWM  TIM_CHANNEL_3
 
 #endif

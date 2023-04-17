@@ -14,6 +14,7 @@ extern uint32_t devices[MAX_DEVICES];
 
 extern uint32_t victim_uid;
 extern uint8_t alert_flag;
+extern uint8_t welcome_flag;
 
 extern uint32_t UID;
 XBee_Data XBee_Received;
@@ -138,6 +139,10 @@ void XBee_Resolve() {
 				}
 				receiving_devices = 0;
 				printf("Received device list\r\n");
+				break;
+			case PlayWelcome:
+				printf("Playing welcome message\r\n");
+				welcome_flag = 1;
 				break;
 			default:
 				printf("Incorrect command sent to helmet\r\n");

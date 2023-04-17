@@ -7,7 +7,7 @@
 #include "stm32f4xx_hal.h"
 
 #define AUDIO_BUF_LEN 1024
-#define MAX_AUDIO_QUEUE_LEN 4
+#define MAX_AUDIO_QUEUE_LEN 7
 
 typedef struct WAV_Header {
 	uint32_t riff;
