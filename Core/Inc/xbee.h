@@ -8,7 +8,7 @@
 #define MIN_TRANSMIT_PERIOD 100
 #define MAX_PATH_LENGTH 50
 #define MAX_DEVICES 4
-#define HANDSHAKE_TIMEOUT 10000
+#define FILE_TIMEOUT 5000
 
 typedef enum {
 	PrintMessage, ReceiveFile, ImpactEvent, HelpEvent, Register, // universal
@@ -26,7 +26,7 @@ typedef struct {
 void XBee_Transmit(XBee_Data *data);
 void XBee_Transmit_File_Start(const TCHAR *path, uint32_t target);
 void XBee_Transmit_File();
-void XBee_Receive();
+void XBee_Receive(XBee_Data *data);
 void XBee_Handshake();
 void XBee_Init();
 

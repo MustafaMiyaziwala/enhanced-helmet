@@ -90,7 +90,7 @@ void XBee_Receive_File() {
 		printf("\r\n");
 		file_buf = (uint8_t *) malloc(rsize);
 		HAL_UART_Receive_DMA(XBEE_UART, file_buf, rsize);
-		__HAL_TIM_SET_AUTORELOAD(FILE_TIMER, 1000);
+		__HAL_TIM_SET_AUTORELOAD(FILE_TIMER, FILE_TIMEOUT * 2);
 		tr = 0;
 		HAL_TIM_Base_Start_IT(FILE_TIMER);
 		receiving_file = 1;
