@@ -129,8 +129,10 @@ enum CameraState camera_state = CAMERA_IDLE;
 uint32_t devices[MAX_DEVICES];
 int num_registered_devices;
 XBee_Data xbee_packet;
+XBee_Data XBee_Received;
 uint32_t UID;
 uint32_t victim_uid = 0;
+uint8_t tr;
 
 // camera
 uint8_t curr_camera_byte=0;
@@ -251,7 +253,13 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim) {
 		HAL_GPIO_WritePin(HEADLAMP_OUT_GPIO_Port, HEADLAMP_OUT_Pin, GPIO_PIN_SET);
 		HAL_TIM_Base_Stop_IT(HEADLAMP_TIMER);
 	} else if (htim == FILE_TIMER) {
-		XBee_Transmit_File();
+		if (tr) {
+			printf("Receiving file timed out\r\n");
+			HAL_UART_DMAStop(XBEE_UART);
+			XBee_Receive(&XBee_Received);
+		} else {
+			XBee_Transmit_File();
+		}
 		HAL_TIM_Base_Stop_IT(FILE_TIMER);
 	} else if (htim == PULSE_TIMER) {
 		if (pulsing == 1) {
