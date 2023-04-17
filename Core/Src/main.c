@@ -56,7 +56,7 @@
 #define IMPACT_EVENT 1
 
 
-//#define camera
+#define camera
 #define sd
 
 /* USER CODE END PD */
@@ -93,7 +93,8 @@ DMA_HandleTypeDef hdma_usart1_tx;
 // filesystem
 FATFS fs;
 FATFS * pfs;
-FIL fil; // belongs to camera
+FIL fil; // belongs to xbee
+FIL fil_cam;
 FIL audio_fil;
 FRESULT fres;
 DWORD fre_clust;
@@ -142,6 +143,7 @@ uint32_t camera_fifo_length = 0;
 int camera_buf_idx = 0;
 uint8_t camera_buf[CHUNK_SIZE];
 int video_id = 0;
+FRESULT fr;
 
 uint8_t ULTRASONIC_IGNORE = 1;
 uint8_t pulsing = 0;
@@ -282,8 +284,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim) {
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 	// TODO: remove, this is just for testing
 	if (GPIO_Pin == 0x2000) {
-		printf("Save requested\r\n");
-		save_requested = 1;
+//		printf("Save requested\r\n");
+//		save_requested = 1;
 	} else if (GPIO_Pin & (1 << 7)) { // Buttons interrupt
 		uint8_t btn = get_released_button(&btns);
 
@@ -316,6 +318,11 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 				printf("Record\r\n");
 				play_wav(&audio, "/audio/video_chime.wav");
 				play_wav(&audio, "/audio/save_video.wav");
+				if (!save_requested) {
+					save_requested = 1;
+				} else {
+					play_wav(&audio, "/audio/error.wav");
+				}
 				// TODO: Set camera state machine
 				PWM_PULSE_RIGHT();
 				break;
@@ -512,7 +519,7 @@ int main(void)
 	PWM_RESET_IGNORE();
 	
 	XBee_Init();
-	XBee_Handshake();
+//	XBee_Handshake();
 
 
 	// audio struct initialize
@@ -581,7 +588,7 @@ int main(void)
 				xbee_packet.command = ImpactEvent;
 			}
 
-			XBee_Transmit(&xbee_packet);
+//			XBee_Transmit(&xbee_packet);
 			save_requested = 1;
 
 			event_flag = 0;
@@ -616,7 +623,7 @@ int main(void)
 					char* filename = malloc(filename_len+1);
 					snprintf(filename, filename_len+1, "%d.DAT", video_id);
 
-					FRESULT fr = f_open(&fil, filename, FA_OPEN_ALWAYS | FA_READ | FA_WRITE);
+					fr = f_open(&fil_cam, filename, FA_OPEN_ALWAYS | FA_READ | FA_WRITE);
 					printf("%s\r\n", filename);
 					free(filename);
 					if (fr) printf("file open failed\r\n");
@@ -668,18 +675,18 @@ int main(void)
 
 			case CAMERA_SAVE:
 				if (camera_fifo_length--) {
-					DISABLE_NONZERO_IRQ();
+//					DISABLE_NONZERO_IRQ();
 					curr_camera_byte = SPI_OptimizedReadByte();
-					ENABLE_ALL_IRQ();
+//					ENABLE_ALL_IRQ();
 
 					if (camera_buf_idx < CHUNK_SIZE) {
 						camera_buf[camera_buf_idx++] = curr_camera_byte;
 					} else {
 						OV5462_CS_High();
 
-						DISABLE_NONZERO_IRQ();
-						f_write(&fil, camera_buf, sizeof(uint8_t)*CHUNK_SIZE, &bw);
-						ENABLE_ALL_IRQ();
+//						DISABLE_NONZERO_IRQ();
+						fr = f_write(&fil_cam, camera_buf, sizeof(uint8_t)*CHUNK_SIZE, &bw);
+//						ENABLE_ALL_IRQ();
 
 						camera_buf_idx = 0;
 						camera_buf[camera_buf_idx++] = curr_camera_byte;
@@ -689,7 +696,7 @@ int main(void)
 					}
 				} else { // fifo is empty, close file and immediately start re-capture
 					OV5462_CS_High();
-					f_close(&fil);
+					fr = f_close(&fil_cam);
 					printf("Save complete \r\n");
 					OV5462_trigger_capture(&ov5462);
 

@@ -24,6 +24,7 @@ volatile int transmitting_file;
 extern volatile int receiving_file;
 volatile int receiving_devices;
 int is_receive_target = 0;
+int handshaking;
 
 uint8_t *file_buf;
 FSIZE_t fsize;
@@ -159,6 +160,10 @@ void XBee_Resolve() {
 			case ResendFile:
 				XBee_Broadcast_File();
 				break;
+			case HandshakeComplete:
+				printf("Handshake complete!\r\n");
+				handshaking = 0;
+				break;
 			default:
 				printf("Incorrect command sent to helmet\r\n");
 		}
@@ -198,6 +203,7 @@ fail:
 }
 
 void XBee_Handshake() {
+	handshaking = 1;
 	printf("Requesting devices\r\n");
 	xbee_packet.command = RequestDevices;
 	xbee_packet.target = MASTER_UID;
@@ -220,6 +226,7 @@ void XBee_Handshake() {
 	XBee_Transmit(&xbee_packet);
 	HAL_Delay(100);
 	XBee_Broadcast_File();
+	while (handshaking);
 }
 
 void XBee_Init() {
