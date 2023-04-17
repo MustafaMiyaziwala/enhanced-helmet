@@ -8,7 +8,7 @@
 #define MIN_TRANSMIT_PERIOD 100
 #define MAX_PATH_LENGTH 50
 #define MAX_DEVICES 4
-#define FILE_TIMEOUT 10000
+#define FILE_TIMEOUT 5000
 
 typedef enum {
 	PrintMessage, ReceiveFile, ImpactEvent, HelpEvent, Register, // universal

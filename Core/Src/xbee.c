@@ -138,18 +138,19 @@ void XBee_Resolve() {
 			done:
 				break;
 			case RequestDevices:
+				printf("Starting handshake with device %u\r\n", (unsigned int) XBee_Received.source);
 				printf("Sending device files\r\n");
 				const TCHAR path[MAX_PATH_LENGTH];
 				for (int i = 0; i < num_registered_devices; i++) {
 					if (devices[i] != XBee_Received.source) {
 						sprintf((char *) path, "/audio/%u.wav", (unsigned int) devices[i]);
+						printf("Transmitting file for device %u\r\n", (unsigned int) devices[i]);
 						XBee_Transmit_File_Start(path, XBee_Received.source);
 						while (transmitting_file);
 						HAL_Delay(MIN_TRANSMIT_PERIOD);
 					}
 				}
 				HAL_Delay(500);
-				printf("Sending device list\r\n");
 				xbee_packet.command = SendDevices;
 				xbee_packet.source = UID;
 				xbee_packet.target = XBee_Received.source;
@@ -163,6 +164,7 @@ void XBee_Resolve() {
 				}
 				*((int *) xbee_packet.data) = num_registered_devices - found;
 				XBee_Transmit(&xbee_packet);
+				printf("Sent device list\r\n");
 				break;
 			default:
 				printf("Incorrect command sent to base station\r\n");
