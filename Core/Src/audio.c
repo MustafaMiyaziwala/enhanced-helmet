@@ -42,7 +42,7 @@ static inline void play_next(Audio* audio) {
 	audio->queue[audio->read_pos] = NULL;
  	audio->read_pos = (audio->read_pos + 1) % MAX_AUDIO_QUEUE_LEN;
 
-	audio->bytes_left = audio->wav_header.file_size - 1024;
+	audio->bytes_left = audio->wav_header.file_size - 2048;
 	audio->dac_buf_bank = 0;
 	audio->dac_buf_idx = 0;
 

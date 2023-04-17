@@ -301,21 +301,22 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 
 			case RECORD_BTN:
 				printf("Record\r\n");
-				//welcome_flag = 1;
-				//play_wav(&audio, "/audio/video_chime.wav");
-				//play_wav(&audio, "/audio/save_video.wav");
+				play_wav(&audio, "/audio/video_chime.wav");
+				play_wav(&audio, "/audio/save_video.wav");
 				// TODO: Set camera state machine
-				//PWM_PULSE_RIGHT();
+				PWM_PULSE_RIGHT();
 				break;
 
 			case HAPTICS_BTN:
 				if(ULTRASONIC_IGNORE) {
 					printf("Enabling Haptics\r\n");
+					//play_wav(&audio, "/audio/siren.wav");
 					play_wav(&audio, "/audio/enable_haptics.wav");
 
 					PWM_RESET_IGNORE();
 				} else {
 					printf("Disabling Haptics\r\n");
+					//play_wav(&audio, "/audio/video_chime.wav");
 					play_wav(&audio, "/audio/disable_haptics.wav");
 					PWM_SET_IGNORE();
 				}
@@ -346,37 +347,37 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 }
 
 
-
-void play_welcome() {
-
-	if (welcome_flag == 2) {
-		if (is_playing(&audio) || audio.queue[audio.read_pos] != NULL ) {
-			return;
-		}
-		printf("Switching\r\n");
-		welcome_flag = 3;
-	}
-
-	if (welcome_flag == 1) {
-		play_wav(&audio, "/intro/intro_p1.wav");
-		++welcome_flag;
-		//welcome_flag = 0;
-		return;
-	}
-
-	if (welcome_flag == 3) {
-		welcome_flag = 0;
-	}
-
-
-	play_wav(&audio, "/intro/intro_p2.wav");
-	play_wav(&audio, "/intro/intro_p3.wav");
-	play_wav(&audio, "/intro/intro_p4.wav");
-	play_wav(&audio, "/intro/intro_p5.wav");
-	play_wav(&audio, "/intro/intro_p6.wav");
-
-
-}
+//
+//void play_welcome() {
+//
+//	if (welcome_flag == 2) {
+//		if (is_playing(&audio) || audio.queue[audio.read_pos] != NULL ) {
+//			return;
+//		}
+//		printf("Switching\r\n");
+//		welcome_flag = 3;
+//	}
+//
+//	if (welcome_flag == 1) {
+//		play_wav(&audio, "/intro/intro_p1.wav");
+//		++welcome_flag;
+//		//welcome_flag = 0;
+//		return;
+//	}
+//
+//	if (welcome_flag == 3) {
+//		welcome_flag = 0;
+//	}
+//
+//
+//	play_wav(&audio, "/intro/intro_p2.wav");
+//	play_wav(&audio, "/intro/intro_p3.wav");
+//	play_wav(&audio, "/intro/intro_p4.wav");
+//	play_wav(&audio, "/intro/intro_p5.wav");
+//	play_wav(&audio, "/intro/intro_p6.wav");
+//
+//
+//}
 
 /* USER CODE END 0 */
 
@@ -498,7 +499,7 @@ int main(void)
 	PWM_RESET_IGNORE();
 	
 	XBee_Init();
-	//XBee_Handshake();
+	XBee_Handshake();
 
 
 	// audio struct initialize
@@ -544,10 +545,7 @@ int main(void)
 //		PWM_SET_LEFT(get_motor_value(&distance_sensor_array, LEFT_SENSOR));
 //		PWM_SET_RIGHT(get_motor_value(&distance_sensor_array, RIGHT_SENSOR));
 
-		if (welcome_flag) {
-			printf("%d\r\n", welcome_flag);
-			play_welcome();
-		}
+
 
 		//imu_update(&imu);
 
@@ -1379,12 +1377,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : HEADLAMP_OUT_Pin CAM_CS_Pin AMP_ENABLE_Pin */
-  GPIO_InitStruct.Pin = HEADLAMP_OUT_Pin|CAM_CS_Pin|AMP_ENABLE_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  /*Configure GPIO pin : HEADLAMP_OUT_Pin */
+  GPIO_InitStruct.Pin = HEADLAMP_OUT_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+  HAL_GPIO_Init(HEADLAMP_OUT_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : SD_CS_Pin */
   GPIO_InitStruct.Pin = SD_CS_Pin;
@@ -1392,6 +1390,13 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(SD_CS_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : CAM_CS_Pin AMP_ENABLE_Pin */
+  GPIO_InitStruct.Pin = CAM_CS_Pin|AMP_ENABLE_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pin : IMU_INT_Pin */
   GPIO_InitStruct.Pin = IMU_INT_Pin;
