@@ -253,8 +253,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim) {
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 	// TODO: remove, this is just for testing
 	if (GPIO_Pin == 0x2000) {
-		printf("Save requested\r\n");
-		save_requested = 1;
+		printf("Impact event emitted\r\n");
+		xbee_packet.command = ImpactEvent;
+		xbee_packet.target = 0;
+		XBee_Transmit(&xbee_packet);
 	}
 }
 

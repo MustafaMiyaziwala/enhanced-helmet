@@ -32,6 +32,7 @@ extern uint bw;
 extern uint br;
 
 void XBee_Transmit(XBee_Data *data) {
+	(data)->source = UID;
 	uint32_t time = HAL_GetTick();
 	if (last_transmit == 0 || time < last_transmit || time - last_transmit > MIN_TRANSMIT_PERIOD) {
 		HAL_UART_Transmit_DMA(XBEE_UART, (uint8_t*) data, sizeof(XBee_Data));
