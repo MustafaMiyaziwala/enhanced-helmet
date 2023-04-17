@@ -20,7 +20,7 @@ extern uint32_t from_UID;
 
 volatile int transmitting_file = 0;
 volatile int receiving_devices = 0;
-int receiving_file = 0;
+extern int receiving_file;
 int is_receive_target = 0;
 
 uint8_t *file_buf;
@@ -91,7 +91,7 @@ void XBee_Receive_File() {
 		file_buf = (uint8_t *) malloc(rsize);
 		HAL_UART_Receive_DMA(XBEE_UART, file_buf, rsize);
 		__HAL_TIM_SET_AUTORELOAD(FILE_TIMER, FILE_TIMEOUT * 2);
-		tr = 0;
+		tr = 1;
 		HAL_TIM_Base_Start_IT(FILE_TIMER);
 		receiving_file = 1;
 	} else {
@@ -145,6 +145,7 @@ void XBee_Resolve() {
 						HAL_Delay(MIN_TRANSMIT_PERIOD);
 					}
 				}
+				HAL_Delay(500);
 				printf("Sending device list\r\n");
 				xbee_packet.command = SendDevices;
 				xbee_packet.source = UID;
