@@ -90,6 +90,8 @@ void XBee_Receive_File() {
 		printf("\r\n");
 		file_buf = (uint8_t *) malloc(rsize);
 		HAL_UART_Receive_DMA(XBEE_UART, file_buf, rsize);
+		HAL_TIM_Base_Stop_IT(FILE_TIMER);
+		(FILE_TIMER)->Instance->CNT = 0;
 		__HAL_TIM_SET_AUTORELOAD(FILE_TIMER, FILE_TIMEOUT * 2);
 		tr = 1;
 		HAL_TIM_Base_Start_IT(FILE_TIMER);
@@ -230,7 +232,8 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
 	if (huart == XBEE_UART) {
 		if (transmitting_file == 1) {
-			while (HAL_TIM_Base_GetState(FILE_TIMER) != HAL_TIM_STATE_READY);
+			HAL_TIM_Base_Stop_IT(FILE_TIMER);
+			(FILE_TIMER)->Instance->CNT = 0;
 			__HAL_TIM_SET_AUTORELOAD(FILE_TIMER, 1000);
 			tr = 0;
 			HAL_TIM_Base_Start_IT(FILE_TIMER);

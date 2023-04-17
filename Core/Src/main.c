@@ -232,6 +232,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim) {
 	} else if (htim == &CAMERA_CAPTURE_TIMER) {
 		capture_flag = 1;
 	} else if (htim == FILE_TIMER) {
+		HAL_TIM_Base_Stop_IT(FILE_TIMER);
 		if (tr && receiving_file) {
 			printf("Receiving file timed out\r\n");
 			HAL_UART_DMAStop(XBEE_UART);
@@ -246,7 +247,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim) {
 		} else if (!tr) {
 			XBee_Transmit_File();
 		}
-		HAL_TIM_Base_Stop_IT(FILE_TIMER);
 	}
 }
 
