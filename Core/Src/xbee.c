@@ -194,6 +194,10 @@ void XBee_Resolve_File() {
 	free(file_buf);
 	receiving_file = 0;
 	XBee_Receive(&XBee_Received);
+	xbee_packet.command = HandshakeComplete;
+	xbee_packet.target = from_UID;
+	XBee_Transmit(&xbee_packet);
+	printf("Handshake complete!\r\n");
 }
 
 void XBee_Handshake() {

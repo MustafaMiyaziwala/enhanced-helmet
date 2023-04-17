@@ -13,7 +13,7 @@
 typedef enum {
 	PrintMessage, ReceiveFile, ImpactEvent, HelpEvent, Register, // universal
 	RequestDevices, // only handled by base station (only sent by helmets)
-	SendDevices, PlayWelcome, ResendFile, // only handled by helmets (only sent by base station)
+	SendDevices, PlayWelcome, ResendFile, HandshakeComplete // only handled by helmets (only sent by base station)
 } XBee_Command;
 
 typedef struct {
