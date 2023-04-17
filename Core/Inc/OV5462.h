@@ -34,6 +34,12 @@
 #define MAX_FIFO_LENGTH 0x7FFFFF
 #define BURST_FIFO_READ 0x3C
 
+//#define DISABLE_NONZERO_IRQ() HAL_NVIC_DisableIRQ(TIM4_IRQn);
+//#define ENABLE_ALL_IRQ() HAL_NVIC_EnableIRQ(TIM4_IRQn);
+
+#define DISABLE_NONZERO_IRQ() ;
+#define ENABLE_ALL_IRQ() ;
+
 
 typedef struct OV5462_t {
 	I2C_HandleTypeDef* hi2c;

@@ -41,8 +41,6 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define DISABLE_NONZERO_IRQ() __set_BASEPRI(1 << 4)
-#define ENABLE_ALL_IRQ() __set_BASEPRI(0)
 
 #define CAMERA_SPI hspi1
 #define SD_SPI hspi2
@@ -446,6 +444,9 @@ int main(void)
   MX_TIM9_Init();
   MX_TIM5_Init();
   /* USER CODE BEGIN 2 */
+//  SCB->VTOR = FLASH_BASE;
+//  __set_BASEPRI(0);
+  HAL_NVIC_DisableIRQ(TIM4_IRQn);
 	Headlamp_Init();
 
 
@@ -554,6 +555,9 @@ int main(void)
 
 	init_complete = 1;
 
+//	__set_BASEPRI(1 << 4);
+//	while (1) {}
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -623,7 +627,10 @@ int main(void)
 					char* filename = malloc(filename_len+1);
 					snprintf(filename, filename_len+1, "%d.DAT", video_id);
 
+					DISABLE_NONZERO_IRQ();
+//					HAL_ResumeTick();
 					fr = f_open(&fil_cam, filename, FA_OPEN_ALWAYS | FA_READ | FA_WRITE);
+					ENABLE_ALL_IRQ();
 					printf("%s\r\n", filename);
 					free(filename);
 					if (fr) printf("file open failed\r\n");
@@ -675,18 +682,19 @@ int main(void)
 
 			case CAMERA_SAVE:
 				if (camera_fifo_length--) {
-//					DISABLE_NONZERO_IRQ();
+					DISABLE_NONZERO_IRQ();
 					curr_camera_byte = SPI_OptimizedReadByte();
-//					ENABLE_ALL_IRQ();
+					ENABLE_ALL_IRQ();
 
 					if (camera_buf_idx < CHUNK_SIZE) {
 						camera_buf[camera_buf_idx++] = curr_camera_byte;
 					} else {
 						OV5462_CS_High();
 
-//						DISABLE_NONZERO_IRQ();
+						DISABLE_NONZERO_IRQ();
+//						HAL_ResumeTick();
 						fr = f_write(&fil_cam, camera_buf, sizeof(uint8_t)*CHUNK_SIZE, &bw);
-//						ENABLE_ALL_IRQ();
+						ENABLE_ALL_IRQ();
 
 						camera_buf_idx = 0;
 						camera_buf[camera_buf_idx++] = curr_camera_byte;
@@ -1389,6 +1397,9 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOC, HEADLAMP_OUT_Pin|SD_CS_Pin|CAM_CS_Pin|AMP_ENABLE_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(DAC_CS_GPIO_Port, DAC_CS_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : B1_Pin */
@@ -1417,6 +1428,13 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PB0 */
+  GPIO_InitStruct.Pin = GPIO_PIN_0;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pin : IMU_INT_Pin */
   GPIO_InitStruct.Pin = IMU_INT_Pin;

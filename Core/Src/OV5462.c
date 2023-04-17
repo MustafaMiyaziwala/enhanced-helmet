@@ -45,6 +45,7 @@ uint8_t OV5462_read_i2c_reg(OV5462_t* ov5462, int addr) {
 }
 
 void OV5462_write_spi_reg(OV5462_t* ov5462, uint8_t addr, uint8_t data) {
+	DISABLE_NONZERO_IRQ();
 	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET); // chip select LOW
 
 //	HAL_Delay(100);
@@ -55,11 +56,12 @@ void OV5462_write_spi_reg(OV5462_t* ov5462, uint8_t addr, uint8_t data) {
 	HAL_SPI_Transmit(ov5462->hspi, buf, 1, 100);
 
 	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET); // chip select HIGH
-
+	ENABLE_ALL_IRQ();
 //	HAL_Delay(100);
 }
 
 uint8_t OV5462_read_spi_reg(OV5462_t* ov5462, uint8_t addr) {
+	DISABLE_NONZERO_IRQ();
 	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET); // chip select LOW
 
 //	HAL_Delay(100);
@@ -71,7 +73,7 @@ uint8_t OV5462_read_spi_reg(OV5462_t* ov5462, uint8_t addr) {
 	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET); // chip select HIGH
 
 //	HAL_Delay(100);
-
+	ENABLE_ALL_IRQ();
 	return buf[0];
 }
 
