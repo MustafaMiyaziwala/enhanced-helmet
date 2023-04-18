@@ -6,8 +6,8 @@
 #include "ext_dac.h"
 #include "stm32f4xx_hal.h"
 
-#define AUDIO_BUF_LEN 2048
-#define MAX_AUDIO_QUEUE_LEN 4
+#define AUDIO_BUF_LEN 1024
+#define MAX_AUDIO_QUEUE_LEN 5
 
 typedef struct WAV_Header {
 	uint32_t riff;
@@ -43,6 +43,7 @@ typedef struct Audio {
 	uint8_t dac_flag;
 	uint8_t read_pos;
 	uint8_t write_pos;
+	//uint8_t is_playing;
 } Audio;
 
 

@@ -116,6 +116,9 @@ uint8_t welcome_flag = 0;
 
 int capture_flag = 0;
 int save_requested = 0;
+int save_requested_flag = 0;
+
+uint32_t start_audio_tick = 0;
 
 char victim_filepath[MAX_PATH_LENGTH];
 
@@ -314,12 +317,14 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 
 			case RECORD_BTN:
 				printf("Record\r\n");
-				play_wav(&audio, "/audio/video_chime.wav");
-				play_wav(&audio, "/audio/save_video.wav");
-				if (!save_requested) {
-					save_requested = 1;
+				if (!save_requested && camera_state != CAMERA_SAVE) {
+					play_wav(&audio, "/audio/important_chime.wav");
+					play_wav(&audio, "/audio/save_video.wav");
+					start_audio_tick = HAL_GetTick();
+					save_requested_flag = 1;
 				} else {
 					play_wav(&audio, "/audio/error.wav");
+					printf("already recording\r\n");
 				}
 				// TODO: Set camera state machine
 				PWM_PULSE_RIGHT();
@@ -334,7 +339,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 					PWM_RESET_IGNORE();
 				} else {
 					printf("Disabling Haptics\r\n");
-					//play_wav(&audio, "/audio/video_chime.wav");
+					play_wav(&audio, "/audio/video_chime.wav");
 					play_wav(&audio, "/audio/disable_haptics.wav");
 					PWM_SET_IGNORE();
 				}
@@ -446,7 +451,7 @@ int main(void)
   /* USER CODE BEGIN 2 */
 //  SCB->VTOR = FLASH_BASE;
 //  __set_BASEPRI(0);
-  HAL_NVIC_DisableIRQ(TIM4_IRQn);
+
 	Headlamp_Init();
 
 
@@ -470,6 +475,8 @@ int main(void)
 	ov5462.hspi = &CAMERA_SPI;
 
 	printf("program start!\r\n");
+
+
 
 
 
@@ -519,7 +526,7 @@ int main(void)
 #endif
 	PWM_RESET_IGNORE();
 	
-	XBee_Init();
+//	XBee_Init();
 //	XBee_Handshake();
 
 
@@ -544,14 +551,17 @@ int main(void)
 
 	distance_sensor_array.hadc = &hadc1;
 
+
 	
 	/* INITIALIZATION + TESTS END */
 
+	//HAL_NVIC_DisableIRQ(TIM4_IRQn);
 #ifdef camera
 	OV5462_trigger_capture(&ov5462);
 	enum CameraState camera_state = CAMERA_CHECK;
 	TIM2->CNT = 0;
 #endif
+	//HAL_NVIC_EnableIRQ(TIM4_IRQn);
 
 	init_complete = 1;
 
@@ -593,9 +603,10 @@ int main(void)
 			}
 
 //			XBee_Transmit(&xbee_packet);
-			save_requested = 1;
 
 			event_flag = 0;
+			save_requested_flag = 1;
+			start_audio_tick = HAL_GetTick();
 		}
 
 		if (alert_flag) {
@@ -613,35 +624,53 @@ int main(void)
 			alert_flag = 0;
 		}
 
+		if (save_requested_flag) {
+			save_requested = 1;
+			save_requested_flag = 0;
+		}
+
+//		if (!audio.is_playing) {
+//				printf("Audio not playing\r\n");
+//		}
+
 #ifdef camera
 		/* CAMERA STATE MACHINE */
+
+//		HAL_NVIC_DisableIRQ(TIM4_IRQn);
+//
+
+
+
+
 		switch (camera_state) {
 			case CAMERA_IDLE:
-				if (save_requested && (OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER) & CAPTURE_DONE_MASK)) {
-					OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_RESET_READ);
-					OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK); // clear flag
+				if (save_requested && (HAL_GetTick() - start_audio_tick > 5000)) {
+					if ((OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER) & CAPTURE_DONE_MASK)) {
+						OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_RESET_READ);
+						OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK); // clear flag
 
-					camera_fifo_length = OV5462_read_fifo_length(&ov5462);
-					printf("Buffer length: %lu\r\n", camera_fifo_length);
-					int filename_len = snprintf(NULL, 0, "%d.DAT", video_id);
-					char* filename = malloc(filename_len+1);
-					snprintf(filename, filename_len+1, "%d.DAT", video_id);
+						camera_fifo_length = OV5462_read_fifo_length(&ov5462);
+						printf("Buffer length: %lu\r\n", camera_fifo_length);
+						int filename_len = snprintf(NULL, 0, "%d.DAT", video_id);
+						char* filename = malloc(filename_len+1);
+						snprintf(filename, filename_len+1, "%d.DAT", video_id);
 
-					DISABLE_NONZERO_IRQ();
-//					HAL_ResumeTick();
-					fr = f_open(&fil_cam, filename, FA_OPEN_ALWAYS | FA_READ | FA_WRITE);
-					ENABLE_ALL_IRQ();
-					printf("%s\r\n", filename);
-					free(filename);
-					if (fr) printf("file open failed\r\n");
-					++video_id;
-					camera_buf_idx = 0;
 
-					OV5462_CS_Low(&ov5462);
-					OV5462_request_FIFO_burst(&ov5462); // send FIFO burst command
+	//					HAL_ResumeTick();
+						fr = f_open(&fil_cam, filename, FA_OPEN_ALWAYS | FA_READ | FA_WRITE);
 
-					save_requested = 0;
-					camera_state = CAMERA_SAVE;
+						printf("%s\r\n", filename);
+						free(filename);
+						if (fr) printf("file open failed\r\n");
+						++video_id;
+						camera_buf_idx = 0;
+
+						OV5462_CS_Low(&ov5462);
+						OV5462_request_FIFO_burst(&ov5462); // send FIFO burst command
+
+						save_requested = 0;
+						camera_state = CAMERA_SAVE;
+					}
 				} else if (!save_requested && capture_flag) {
 					camera_state = CAMERA_RECAPTURE_WAIT;
 					capture_flag = 0;
@@ -652,6 +681,10 @@ int main(void)
 				if (OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER) & CAPTURE_DONE_MASK) {
 					printf("capture\r\n");
 					OV5462_trigger_capture(&ov5462);
+					OV5462_trigger_capture(&ov5462);
+					OV5462_trigger_capture(&ov5462);
+					OV5462_trigger_capture(&ov5462);
+					OV5462_trigger_capture(&ov5462);
 
 					TIM2->CNT = 0;
 					camera_state = CAMERA_CHECK;
@@ -659,20 +692,22 @@ int main(void)
 				break;
 
 			case CAMERA_CHECK:
-				if (TIM2->CNT < 10000) {
+				if (TIM2->CNT < 15000) {
 					if (OV5462_read_spi_reg(&ov5462, ARDUCHIP_TRIGGER) & CAPTURE_DONE_MASK) {
 						// capture finished prematurely, restart it
 						uint32_t length = OV5462_read_fifo_length(&ov5462);
 
-						 if (length < 0x3FFFFF) {
+						 if (length < 0x3FFFFF && length > 0) {
 							 printf("Premature capture completion! %lu bytes \r\n", length);
 
-							OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK);
-							OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_START_MASK);
+							OV5462_trigger_capture(&ov5462);
+							OV5462_trigger_capture(&ov5462);
+							OV5462_trigger_capture(&ov5462);
+							OV5462_trigger_capture(&ov5462);
+							OV5462_trigger_capture(&ov5462);
 							camera_state = CAMERA_IDLE;
 						 } else {
-							 OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_CLEAR_MASK);
-							 OV5462_write_spi_reg(&ov5462, ARDUCHIP_FIFO, FIFO_START_MASK);
+							 OV5462_trigger_capture(&ov5462);
 						 }
 					}
 				} else {
@@ -713,6 +748,10 @@ int main(void)
 				}
 				break;
 		}
+
+//		HAL_NVIC_EnableIRQ(TIM4_IRQn);
+
+		//HAL_NVIC_EnableIRQ(TIM4_IRQn);
 #endif
     /* USER CODE END WHILE */
 

@@ -110,6 +110,8 @@ void OV5462_continuous_capture_init(OV5462_t* ov5462) {
 		frames = 0x07;
 	}
 
+	frames = 0x01;
+
 	OV5462_write_spi_reg(ov5462, ARDUCHIP_FRAMES, frames);
 }
 
@@ -143,7 +145,8 @@ void OV5462_CS_Low() {
 
 void OV5462_trigger_capture(OV5462_t* ov) {
 	OV5462_write_spi_reg(ov, ARDUCHIP_FIFO, FIFO_CLEAR_MASK); // clear flag
-	OV5462_write_spi_reg(ov, ARDUCHIP_FIFO, FIFO_RESET_WRITE);
-	OV5462_write_spi_reg(ov, ARDUCHIP_FIFO, FIFO_RESET_READ);
+	OV5462_write_spi_reg(ov, ARDUCHIP_FIFO, FIFO_CLEAR_MASK); // clear flag
+//	OV5462_write_spi_reg(ov, ARDUCHIP_FIFO, FIFO_RESET_WRITE);
+//	OV5462_write_spi_reg(ov, ARDUCHIP_FIFO, FIFO_RESET_READ);
 	OV5462_write_spi_reg(ov, ARDUCHIP_FIFO, FIFO_START_MASK); // start capture
 }

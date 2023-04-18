@@ -117,8 +117,10 @@ void audio_callback(Audio* audio) {
 
 	// ERROR CASE: stop and reinitialize
 	if (!(audio->dac_flag & 0b11)) {
-		stop_audio(audio);
-		audio_init(audio);
+//		stop_audio(audio);
+//		audio_init(audio);
+//		printf("DAC error?\r\n");
+		audio->dac_flag |= (1 << 5);
 		return;
 	}
 
