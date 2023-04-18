@@ -80,7 +80,7 @@ void HAPTICS_INIT() {
 	HAL_TIM_PWM_Start(&htim3, CENTER_PWM);
 	HAL_TIM_PWM_Start(&htim3, LEFT_PWM);
 	HAL_TIM_PWM_Start(&htim3, RIGHT_PWM);
-	ULTRASONIC_IGNORE = FALSE;
+	ULTRASONIC_IGNORE = TRUE;
 }
 
 /* PWM commands */

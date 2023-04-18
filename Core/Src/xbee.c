@@ -86,7 +86,7 @@ void XBee_Receive(XBee_Data *data) {
 void XBee_Receive_File() {
 	if (!receiving_file) {
 		printf("Receiving file\r\n");
-		file_buf = (uint8_t *) malloc(rsize);
+		file_buf = (uint8_t *) malloc(rsize * sizeof(uint8_t));
 		HAL_UART_Receive_DMA(XBEE_UART, file_buf, rsize);
 		HAL_TIM_Base_Stop_IT(FILE_TIMER);
 		(FILE_TIMER)->Instance->CNT = 0;
@@ -139,7 +139,7 @@ void XBee_Resolve() {
 						goto done;
 					}
 				}
-				devices[num_registered_devices] = *((uint32_t *) XBee_Received.source);
+				devices[num_registered_devices] = XBee_Received.source;
 				printf("Registered new device with UID %u\r\n", (unsigned int) XBee_Received.source);
 				num_registered_devices++;
 			done:
@@ -204,6 +204,7 @@ fail:
 
 void XBee_Handshake() {
 	handshaking = 1;
+	printf("Beginning handshake\r\n");
 	printf("Requesting devices\r\n");
 	xbee_packet.command = RequestDevices;
 	xbee_packet.target = MASTER_UID;
@@ -219,14 +220,15 @@ void XBee_Handshake() {
 			 XBee_Receive(&XBee_Received);
 		}
 	}
-	HAL_Delay(MIN_TRANSMIT_PERIOD);
+	HAL_Delay(500);
 	printf("Broadcasting identity\r\n");
 	xbee_packet.command = Register;
 	xbee_packet.target = 0;
 	XBee_Transmit(&xbee_packet);
-	HAL_Delay(100);
+	HAL_Delay(500);
 	XBee_Broadcast_File();
 	while (handshaking);
+//	printf("Handshake complete!\r\n");
 }
 
 void XBee_Init() {

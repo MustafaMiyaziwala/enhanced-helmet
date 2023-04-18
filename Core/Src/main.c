@@ -113,6 +113,9 @@ uint8_t init_complete = 0;
 uint8_t countdown_flag = 0;
 uint8_t alert_flag = 0;
 uint8_t welcome_flag = 0;
+uint8_t buttons_enable_flag = 0;
+uint8_t record_btn_count = 0;
+uint32_t record_btn_time = 0;
 
 int capture_flag = 0;
 int check_capturing = 0;
@@ -254,7 +257,11 @@ int read_fifo_and_write_data_file() {
 	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
 	is_header = 0;
 	f_close(&fil_cam);
-	printf("Save complete \r\n");
+	printf("Save complete\r\n");
+	xbee_packet.command = PrintMessage;
+	xbee_packet.target = MASTER_UID;
+	strcpy((char *) xbee_packet.data, "Helmet video save complete");
+	XBee_Transmit(&xbee_packet);
 	save_requested = 0;
 
 	trigger_capture();
@@ -382,6 +389,11 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 		printf("Save requested\r\n");
 		save_requested = 1;
 	} else if (GPIO_Pin & (1 << 7)) { // Buttons interrupt
+
+		if (!buttons_enable_flag) {
+			return;
+		}
+
 		uint8_t btn = get_released_button(&btns);
 
 		if (btn != NO_BTN && countdown_flag) {
@@ -393,11 +405,11 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 			}
 
 			countdown_flag = 0;
-			if (btn == HELP_BTN || btn == RECORD_BTN) {
-				PWM_PULSE_RIGHT();
-			} else {
-				PWM_PULSE_LEFT();
-			}
+//			if (btn == HELP_BTN || btn == RECORD_BTN) {
+//				PWM_PULSE_RIGHT();
+//			} else {
+//				PWM_PULSE_LEFT();
+//			}
 		} else if (!is_playing(&audio)) {
 
 		switch (btn) {
@@ -406,24 +418,38 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 				play_wav(&audio, "/audio/siren.wav"); // possibly change chime
 				play_wav(&audio, "/audio/help_siren.wav");
 				countdown_flag = HELP_EVENT;
-				PWM_PULSE_RIGHT();
+//				PWM_PULSE_RIGHT();
 				break;
 
 			case RECORD_BTN:
 				printf("Record\r\n");
-				if (!save_requested && camera_state != CAMERA_SAVE) {
-//					play_wav(&audio, "/audio/important_chime.wav");
-//					play_wav(&audio, "/audio/save_video.wav");
-//					start_audio_tick = HAL_GetTick();
-					save_requested = 1;
-//					capture_flag = 0;
-//					TIM2->CNT = 0;
+
+				if (HAL_GetTick() - record_btn_time < 2000) {
+					++record_btn_count;
 				} else {
-					play_wav(&audio, "/audio/error.wav");
-					printf("already recording\r\n");
+					record_btn_count = 1;
 				}
-				// TODO: Set camera state machine
-//				PWM_PULSE_RIGHT();
+
+				record_btn_time = HAL_GetTick();
+
+				if (record_btn_count == 2) {
+					printf("Recording triggered\r\n");
+					record_btn_count = 0;
+					if (!save_requested && camera_state != CAMERA_SAVE) {
+						// play_wav(&audio, "/audio/important_chime.wav");
+						// play_wav(&audio, "/audio/save_video.wav");
+						// start_audio_tick = HAL_GetTick();
+						 save_requested = 1;
+						// capture_flag = 0;
+						// TIM2->CNT = 0;
+					} else {
+						play_wav(&audio, "/audio/error.wav");
+						printf("already recording\r\n");
+					}
+					// TODO: Set camera state machine
+					PWM_PULSE_RIGHT();
+				}
+
 				break;
 
 			case HAPTICS_BTN:
@@ -439,7 +465,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 					play_wav(&audio, "/audio/disable_haptics.wav");
 					PWM_SET_IGNORE();
 				}
-				PWM_PULSE_LEFT();
+//				PWM_PULSE_LEFT();
 				break;
 
 			case LIGHT_BTN:
@@ -561,7 +587,6 @@ int main(void)
 	FIX_TIMER_TRIGGER(&htim11);
 
 	HAL_TIM_Base_Start_IT(&htim2);
-	//HAL_TIM_Base_Start_IT(&htim9);
 	HAPTICS_INIT();
 
 	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
@@ -621,10 +646,9 @@ int main(void)
 
 	OV5462_continuous_capture_init(&ov5462);
 #endif
-	PWM_RESET_IGNORE();
 	
-//	XBee_Init();
-//	XBee_Handshake();
+	XBee_Init();
+	XBee_Handshake();
 
 
 	// audio struct initialize
@@ -662,11 +686,14 @@ int main(void)
 	TIM2->CNT = 0;
 #endif
 	//HAL_NVIC_EnableIRQ(TIM4_IRQn);
-
+	HAL_TIM_Base_Start_IT(&htim9);
 	init_complete = 1;
 
 //	__set_BASEPRI(1 << 4);
 //	while (1) {}
+
+
+
 
   /* USER CODE END 2 */
 
@@ -675,13 +702,25 @@ int main(void)
 	while (1)
 	{
 		/* UPDATES (ALWAYS RUN) */
-//		PWM_SET_CENTER(get_motor_value(&distance_sensor_array, CENTER_SENSOR));
-//		PWM_SET_LEFT(get_motor_value(&distance_sensor_array, LEFT_SENSOR));
-//		PWM_SET_RIGHT(get_motor_value(&distance_sensor_array, RIGHT_SENSOR));
 
+		if (!buttons_enable_flag) {
+			imu_update(&imu);
 
+			printf("%d\r\n", imu.z_accel);
 
-		//imu_update(&imu);
+			if (imu.z_accel < -3500) {
+				buttons_enable_flag = 1;
+				play_wav(&audio, "/audio/init.wav");
+			}
+		}
+
+//		printf("%lu\t%lu\t%lu\r\n", distance_sensor_array.readings[LEFT_SENSOR],
+//					distance_sensor_array.readings[CENTER_SENSOR],
+//					distance_sensor_array.readings[RIGHT_SENSOR]);
+		PWM_SET_CENTER(get_motor_value(&distance_sensor_array, CENTER_SENSOR));
+		PWM_SET_LEFT(get_motor_value(&distance_sensor_array, LEFT_SENSOR));
+		PWM_SET_RIGHT(get_motor_value(&distance_sensor_array, RIGHT_SENSOR));
+
 
 		check_and_fill_audio_buf(&audio);
 
@@ -702,7 +741,7 @@ int main(void)
 				xbee_packet.command = ImpactEvent;
 			}
 
-//			XBee_Transmit(&xbee_packet);
+			XBee_Transmit(&xbee_packet);
 
 			event_flag = 0;
 //			save_requested = 1;
@@ -718,9 +757,9 @@ int main(void)
 			play_wav(&audio, victim_filepath);
 
 			if (alert_flag == HELP_ALERT) {
-//				play_wav(&audio, "/audio/help_response.wav");
+				play_wav(&audio, "/audio/help_response.wav");
 			} else if (alert_flag == IMPACT_ALERT) {
-//				play_wav(&audio, "/audio/impact_response.wav");
+				play_wav(&audio, "/audio/impact_response.wav");
 			}
 
 			alert_flag = 0;
@@ -849,7 +888,7 @@ static void MX_ADC1_Init(void)
   hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV8;
   hadc1.Init.Resolution = ADC_RESOLUTION_12B;
   hadc1.Init.ScanConvMode = ENABLE;
-  hadc1.Init.ContinuousConvMode = ENABLE;
+  hadc1.Init.ContinuousConvMode = DISABLE;
   hadc1.Init.DiscontinuousConvMode = DISABLE;
   hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
   hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
@@ -1064,7 +1103,7 @@ static void MX_TIM2_Init(void)
   htim2.Instance = TIM2;
   htim2.Init.Prescaler = 8399;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 610000;
+  htim2.Init.Period = 400000;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
@@ -1265,7 +1304,7 @@ static void MX_TIM9_Init(void)
   htim9.Instance = TIM9;
   htim9.Init.Prescaler = 8399;
   htim9.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim9.Init.Period = 65535;
+  htim9.Init.Period = 1000;
   htim9.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim9.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim9) != HAL_OK)

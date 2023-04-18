@@ -21,9 +21,11 @@ void update_readings_async(distance_sensor_array_t* ds) {
 }
 
 
-uint32_t get_motor_value(distance_sensor_array_t* ds, uint8_t direction) {
-	return  ds->readings[direction] > 200 ? 0 : ds->readings[direction] < 90
-			? 255 : (uint8_t)(800.0 / (ds->readings[direction] - 88));
+uint8_t get_motor_value(distance_sensor_array_t* ds, uint8_t direction) {
+//	return  ds->readings[direction] > 300 ? 0 : ds->readings[direction] < 90
+//			? 50 : (uint8_t)(50.0 / (ds->readings[direction] - 88));
+
+	return (uint8_t)(ds->readings[direction] > 300 ? 0 : (300 - ds->readings[direction]) / 7.0);
 }
 
 

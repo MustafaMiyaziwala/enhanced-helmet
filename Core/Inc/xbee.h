@@ -4,11 +4,11 @@
 #include "stm32f4xx_hal.h"
 #include "ff.h"
 
-#define MAX_DEVICES 4
+#define MAX_DEVICES 5
 #define MIN_TRANSMIT_PERIOD 100
 #define MAX_PATH_LENGTH 50
 #define FILE_TIMEOUT 5000
-#define HANDSHAKE_TIMEOUT 10000
+#define HANDSHAKE_TIMEOUT 15000
 
 #define HELP_ALERT 2
 #define IMPACT_ALERT 1
