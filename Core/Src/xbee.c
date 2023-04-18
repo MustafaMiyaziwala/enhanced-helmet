@@ -139,18 +139,18 @@ void XBee_Resolve() {
 				break;
 			case RequestDevices:
 				printf("Starting handshake with device %u\r\n", (unsigned int) XBee_Received.source);
-				printf("Sending device files\r\n");
-				const TCHAR path[MAX_PATH_LENGTH];
-				for (int i = 0; i < num_registered_devices; i++) {
-					if (devices[i] != XBee_Received.source) {
-						sprintf((char *) path, "/audio/%u.wav", (unsigned int) devices[i]);
-						printf("Transmitting file for device %u\r\n", (unsigned int) devices[i]);
-						XBee_Transmit_File_Start(path, XBee_Received.source);
-						while (transmitting_file);
-						HAL_Delay(500);
-					}
-				}
-				HAL_Delay(500);
+//				printf("Sending device files\r\n");
+//				const TCHAR path[MAX_PATH_LENGTH];
+//				for (int i = 0; i < num_registered_devices; i++) {
+//					if (devices[i] != XBee_Received.source) {
+//						sprintf((char *) path, "/audio/%u.wav", (unsigned int) devices[i]);
+//						printf("Transmitting file for device %u\r\n", (unsigned int) devices[i]);
+//						XBee_Transmit_File_Start(path, XBee_Received.source);
+//						while (transmitting_file);
+//						HAL_Delay(500);
+//					}
+//				}
+//				HAL_Delay(500);
 				xbee_packet.command = SendDevices;
 				xbee_packet.source = UID;
 				xbee_packet.target = XBee_Received.source;
