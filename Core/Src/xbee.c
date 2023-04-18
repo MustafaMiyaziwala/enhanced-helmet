@@ -150,6 +150,7 @@ void XBee_Resolve() {
 						HAL_Delay(500);
 					}
 				}
+				HAL_Delay(500);
 				xbee_packet.command = SendDevices;
 				xbee_packet.source = UID;
 				xbee_packet.target = XBee_Received.source;
