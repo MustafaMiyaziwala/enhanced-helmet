@@ -159,7 +159,7 @@ void XBee_Resolve() {
 					if (devices[i] == XBee_Received.source) {
 						found = 1;
 					} else {
-						*((uint32_t *) &xbee_packet.data[sizeof(int) + i * sizeof(uint32_t)] + found) = devices[i];
+						*((uint32_t *) &xbee_packet.data[sizeof(int) + (i - found) * sizeof(uint32_t)]) = devices[i];
 					}
 				}
 				*((int *) xbee_packet.data) = num_registered_devices - found;
