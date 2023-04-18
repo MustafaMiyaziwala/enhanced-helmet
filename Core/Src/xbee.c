@@ -139,7 +139,7 @@ void XBee_Resolve() {
 						goto done;
 					}
 				}
-				devices[num_registered_devices] = *((uint32_t *) XBee_Received.source);
+				devices[num_registered_devices] = XBee_Received.source;
 				printf("Registered new device with UID %u\r\n", (unsigned int) XBee_Received.source);
 				num_registered_devices++;
 			done:
