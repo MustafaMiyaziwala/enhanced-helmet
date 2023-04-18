@@ -1,5 +1,6 @@
 #include "audio.h"
 
+int file_closed = 0;
 
 static inline uint8_t fill_audio_buffer(Audio* audio, uint8_t buf_bank) {
 	UINT bytes_to_read = audio->wav_header.file_size < AUDIO_BUF_LEN
@@ -35,8 +36,11 @@ static inline void play_next(Audio* audio) {
 		return;
 	}
 
+
 	UINT count;
-	f_open(audio->fil, filename, FA_OPEN_ALWAYS | FA_READ | FA_WRITE);
+//	audio->fil = 1;
+	FRESULT resp = f_open(audio->fil, filename, FA_READ);
+	file_closed = 0;
 	f_read(audio->fil, &audio->wav_header, sizeof(WAV_Header), &count);
 
 	audio->queue[audio->read_pos] = NULL;
@@ -71,7 +75,11 @@ void clear_queue(Audio* audio) {
 	audio->read_pos = 0;
 	audio->write_pos = 0;
 	audio->bytes_left = 0;
-	f_close(audio->fil);
+	if (!file_closed) {
+		f_close(audio->fil);
+		file_closed = 1;
+	}
+//	audio->fil = NULL;
 }
 
 uint8_t is_playing(Audio* audio) {
@@ -104,7 +112,11 @@ void audio_callback(Audio* audio) {
 
 	if (!audio->bytes_left) {
 		shutdown_dac(audio->ext_dac);
-		f_close(audio->fil);
+		if (!file_closed) {
+			f_close(audio->fil);
+			file_closed = 1;
+		}
+//		audio->fil = NULL;
 		play_next(audio);
 		return;
 	}

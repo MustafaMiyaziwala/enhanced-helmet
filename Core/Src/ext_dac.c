@@ -12,7 +12,7 @@ static inline uint16_t val_to_dac(uint8_t val) {
 static inline void transmit_cmd(Ext_DAC_t* ext_dac, uint16_t cmd) {
 	HAL_GPIO_WritePin(ext_dac->cs_port, ext_dac->cs_pin, GPIO_PIN_RESET);
 
-	HAL_SPI_Transmit(ext_dac->hspi, (uint8_t*)&cmd, 1, HAL_MAX_DELAY);
+	HAL_SPI_Transmit(ext_dac->hspi, (uint8_t*)&cmd, 1, 1);
 	while (HAL_SPI_GetState(ext_dac->hspi) != HAL_SPI_STATE_READY) {}
 
 	HAL_GPIO_WritePin(ext_dac->cs_port, ext_dac->cs_pin, GPIO_PIN_SET);

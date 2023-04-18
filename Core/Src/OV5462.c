@@ -45,8 +45,8 @@ uint8_t OV5462_read_i2c_reg(OV5462_t* ov5462, int addr) {
 }
 
 void OV5462_write_spi_reg(OV5462_t* ov5462, uint8_t addr, uint8_t data) {
-	DISABLE_NONZERO_IRQ();
 	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET); // chip select LOW
+	HAL_Delay(1);
 
 //	HAL_Delay(100);
 
@@ -56,25 +56,29 @@ void OV5462_write_spi_reg(OV5462_t* ov5462, uint8_t addr, uint8_t data) {
 	HAL_SPI_Transmit(ov5462->hspi, buf, 1, 100);
 
 	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET); // chip select HIGH
-	ENABLE_ALL_IRQ();
+
 //	HAL_Delay(100);
 }
 
 uint8_t OV5462_read_spi_reg(OV5462_t* ov5462, uint8_t addr) {
-	DISABLE_NONZERO_IRQ();
 	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET); // chip select LOW
+	HAL_Delay(1);
 
 //	HAL_Delay(100);
 
 	uint8_t buf[1] = { addr };
+
 	HAL_SPI_Transmit(ov5462->hspi, buf, 1, 100);
 	HAL_SPI_Receive(ov5462->hspi, buf, 1, 100);
+
+//	uint8_t val = SPI_OptimizedReadReg(addr);
 
 	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET); // chip select HIGH
 
 //	HAL_Delay(100);
-	ENABLE_ALL_IRQ();
+
 	return buf[0];
+//	return val;
 }
 
 
@@ -110,8 +114,6 @@ void OV5462_continuous_capture_init(OV5462_t* ov5462) {
 		frames = 0x07;
 	}
 
-	frames = 0x01;
-
 	OV5462_write_spi_reg(ov5462, ARDUCHIP_FRAMES, frames);
 }
 
@@ -136,17 +138,12 @@ uint8_t SPI_OptimizedReadByte(uint8_t* data) {
 	return SPI1->DR;
 }
 
-void OV5462_CS_High() {
-	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_SET);
-}
-void OV5462_CS_Low() {
-	HAL_GPIO_WritePin(OV5462_CS_GPIO, OV5462_CS_PIN, GPIO_PIN_RESET);
-}
-
-void OV5462_trigger_capture(OV5462_t* ov) {
-	OV5462_write_spi_reg(ov, ARDUCHIP_FIFO, FIFO_CLEAR_MASK); // clear flag
-	OV5462_write_spi_reg(ov, ARDUCHIP_FIFO, FIFO_CLEAR_MASK); // clear flag
-//	OV5462_write_spi_reg(ov, ARDUCHIP_FIFO, FIFO_RESET_WRITE);
-//	OV5462_write_spi_reg(ov, ARDUCHIP_FIFO, FIFO_RESET_READ);
-	OV5462_write_spi_reg(ov, ARDUCHIP_FIFO, FIFO_START_MASK); // start capture
+uint8_t SPI_OptimizedReadReg(uint8_t* addr) {
+	while (((SPI1->SR)&(1>>7))) {}; // wait for BSY bit to reset
+	SPI1->DR = addr; // address
+	while (!((SPI1->SR) & (1<<0))) {};
+	while (((SPI1->SR)&(1>>7))) {}; // wait for BSY bit to reset
+	SPI1->DR = 0; // dummy byte
+	while (!((SPI1->SR) & (1<<0))) {};
+	return SPI1->DR;
 }

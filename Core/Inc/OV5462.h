@@ -1,5 +1,5 @@
-#ifndef __OV5462_H
-#define __OV5462_H
+#ifndef OV5462_H
+#define OV5462_H
 
 #include "stm32f4xx_hal.h"
 #include <stdint.h>
@@ -34,12 +34,6 @@
 #define MAX_FIFO_LENGTH 0x7FFFFF
 #define BURST_FIFO_READ 0x3C
 
-//#define DISABLE_NONZERO_IRQ() HAL_NVIC_DisableIRQ(TIM4_IRQn);
-//#define ENABLE_ALL_IRQ() HAL_NVIC_EnableIRQ(TIM4_IRQn);
-
-#define DISABLE_NONZERO_IRQ() ;
-#define ENABLE_ALL_IRQ() ;
-
 
 typedef struct OV5462_t {
 	I2C_HandleTypeDef* hi2c;
@@ -70,8 +64,6 @@ void OV5462_clear_fifo(OV5462_t*);
 uint32_t OV5462_read_fifo_length(OV5462_t*);
 void OV5462_request_FIFO_burst(OV5462_t*);
 uint8_t SPI_OptimizedReadByte();
-void OV5462_trigger_capture(OV5462_t*);
-void OV5462_CS_High();
-void OV5462_CS_Low();
+uint8_t SPI_OptimizedReadReg(uint8_t* addr);
 
 #endif
