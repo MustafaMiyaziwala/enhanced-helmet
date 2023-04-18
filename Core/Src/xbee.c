@@ -100,7 +100,7 @@ void XBee_Receive_File() {
 }
 
 void XBee_Broadcast_File() {
-	printf("Broadcasting file\r\n");
+	printf("Broadcasting name file\r\n");
 	const TCHAR path[MAX_PATH_LENGTH];
 	sprintf((char *) path, "/audio/%u.wav", (unsigned int) UID);
 	XBee_Transmit_File_Start(path, 0);
@@ -203,6 +203,7 @@ fail:
 }
 
 void XBee_Handshake() {
+	printf("Beginning handshake\r\n");
 	handshaking = 1;
 	printf("Requesting devices\r\n");
 	xbee_packet.command = RequestDevices;
@@ -220,10 +221,10 @@ void XBee_Handshake() {
 		}
 	}
 	HAL_Delay(MIN_TRANSMIT_PERIOD);
-	printf("Broadcasting identity\r\n");
 	xbee_packet.command = Register;
 	xbee_packet.target = 0;
 	XBee_Transmit(&xbee_packet);
+	printf("Broadcasted identity\r\n");
 	HAL_Delay(100);
 	XBee_Broadcast_File();
 	while (handshaking);
