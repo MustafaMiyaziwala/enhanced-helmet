@@ -27,7 +27,6 @@ void XBee_Transmit(XBee_Data *data);
 void XBee_Transmit_File_Start(const TCHAR *path, uint32_t target);
 void XBee_Transmit_File();
 void XBee_Receive(XBee_Data *data);
-void XBee_Handshake();
 void XBee_Init();
 
 extern UART_HandleTypeDef huart1;

@@ -147,10 +147,9 @@ void XBee_Resolve() {
 						printf("Transmitting file for device %u\r\n", (unsigned int) devices[i]);
 						XBee_Transmit_File_Start(path, XBee_Received.source);
 						while (transmitting_file);
-						HAL_Delay(MIN_TRANSMIT_PERIOD);
+						HAL_Delay(500);
 					}
 				}
-				HAL_Delay(500);
 				xbee_packet.command = SendDevices;
 				xbee_packet.source = UID;
 				xbee_packet.target = XBee_Received.source;
@@ -183,17 +182,21 @@ void XBee_Resolve_File() {
 		ret = f_open(&fil, rpath, FA_OPEN_ALWAYS | FA_WRITE);
 		if(ret != FR_OK) {
 			printf("Failed to open file (%i)\r\n", ret);
+			goto fail;
 		}
 		ret = f_write(&fil, file_buf, rsize, &bw);
 		if(ret != FR_OK) {
 			printf("Failed to write file (%i)\r\n", ret);
+			goto fail;
 		}
 		ret = f_close(&fil);
 		if(ret != FR_OK) {
 			printf("Failed to close file (%i)\r\n", ret);
+			goto fail;
 		}
 		printf("Received file\r\n");
 	}
+fail:
 	free(file_buf);
 	receiving_file = 0;
 	XBee_Receive(&XBee_Received);
@@ -201,27 +204,6 @@ void XBee_Resolve_File() {
 	xbee_packet.target = from_UID;
 	XBee_Transmit(&xbee_packet);
 	printf("Handshake complete!\r\n");
-}
-
-void XBee_Handshake() {
-	printf("Requesting devices\r\n");
-	xbee_packet.command = RequestDevices;
-	xbee_packet.source = UID;
-	xbee_packet.target = MASTER_UID;
-	XBee_Transmit(&xbee_packet);
-	receiving_devices = 1;
-	while (receiving_devices);
-	printf("Broadcasting identity\r\n");
-	xbee_packet.command = Register;
-	xbee_packet.target = 0;
-	*((uint32_t *) xbee_packet.data) = UID;
-	XBee_Transmit(&xbee_packet);
-//	const TCHAR path[MAX_PATH_LENGTH];
-//	strcpy((char *) path, (char *) &xbee_packet.data[sizeof(uint32_t)]);
-//	HAL_Delay(500);
-//	printf("Transmitting file\r\n");
-//	XBee_Transmit_File_Start(path, 0);
-//	while (transmitting_file);
 }
 
 void XBee_Init() {

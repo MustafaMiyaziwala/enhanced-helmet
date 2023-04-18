@@ -340,11 +340,6 @@ int main(void)
 	XBee_Init();
 	devices[0] = UID;
 	num_registered_devices = 1;
-	//XBee_Handshake();
-	//Headlamp_Init();
-	//Input_Init();
-
-//	XBee_Handshake();
 	
 	// audio struct initialize
 	ext_dac.cs_port = GPIOD;
@@ -359,9 +354,6 @@ int main(void)
 	audio.amp_enable_pin = GPIO_PIN_5;
 	audio_init(&audio);
 
-//	play_wav(&audio, "/sine.wav");
-//	play_wav(&audio, "/song.wav");
-
 
 	
 	/* INITIALIZATION + TESTS END */
@@ -373,24 +365,6 @@ int main(void)
   /* USER CODE BEGIN WHILE */
 	while (1)
 	{
-//		XBee_Handshake();
-//		HAL_Delay(5000);
-
-
-
-		/* MAIN STATE MACHINE */
-		
-		
-
-		/* AUDIO BUFFER LOAD */
-		check_and_fill_audio_buf(&audio);
-		//write_to_dac(&ext_dac, 127);
-
-
-//		toggle_headlamp();
-//		HAL_Delay(5000);
-//		toggle_headlamp();
-//		HAL_Delay(5000);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
